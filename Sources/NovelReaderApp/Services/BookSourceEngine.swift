@@ -138,8 +138,14 @@ final class LegadoBookSourceEngine: BookSourceEngine {
             }
             do {
                 let url = resolvedSearchURL(template: source.searchUrl, query: query, base: source.url)
-                let html = try await fetch(url: url)
-                let parsed = try parseSearchResults(html: html, source: source, ruleType: ruleType)
+                let data = try await fetchData(url: url)
+                let parsed: [OnlineSearchResult]
+                if ruleType == .jsonpath {
+                    parsed = parseSearchResultsJSON(data: data, source: source)
+                } else {
+                    let html = String(data: data, encoding: .utf8) ?? String(decoding: data, as: UTF8.self)
+                    parsed = try parseSearchResults(html: html, source: source, ruleType: ruleType)
+                }
                 results.append(contentsOf: parsed)
             } catch {
                 continue
@@ -190,21 +196,24 @@ final class LegadoBookSourceEngine: BookSourceEngine {
         isPaused = false
     }
 
-    private func fetch(url: URL) async throws -> String {
-        let request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
-        let (data, response): (Data, URLResponse)
+    private func fetchData(url: URL) async throws -> Data {
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
+        request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", forHTTPHeaderField: "User-Agent")
         do {
-            (data, response) = try await session.data(for: request)
+            let (data, response) = try await session.data(for: request)
+            if let http = response as? HTTPURLResponse, (400...499).contains(http.statusCode) {
+                throw BookSourceError.sourceUnavailable
+            }
+            return data
         } catch let error as URLError {
             throw BookSourceError.network(Self.friendlyMessage(for: error))
         } catch {
             throw BookSourceError.network("请求失败，请稍后再试。")
         }
+    }
 
-        if let http = response as? HTTPURLResponse, (400...499).contains(http.statusCode) {
-            throw BookSourceError.sourceUnavailable
-        }
-
+    private func fetch(url: URL) async throws -> String {
+        let data = try await fetchData(url: url)
         if let text = String(data: data, encoding: .utf8) {
             return text
         }
@@ -337,6 +346,52 @@ final class LegadoBookSourceEngine: BookSourceEngine {
         return chapters
     }
 
+    private func parseSearchResultsJSON(data: Data, source: BookSource) -> [OnlineSearchResult] {
+        let path = SourceRuleType.stripJSONPathPrefix(source.searchRule)
+        let nodes = JSONPathEvaluator.evaluate(jsonData: data, path: path)
+
+        var results: [OnlineSearchResult] = []
+        for node in nodes {
+            let title = applyLegadoRules(JSONPathEvaluator.extractAttribute(from: node, rule: source.titleRule), source.titleRule)
+            if title.isEmpty { continue }
+            let author = applyLegadoRules(JSONPathEvaluator.extractAttribute(from: node, rule: source.authorRule), source.authorRule)
+            let bookUrlRule = source.bookUrlRule.isEmpty ? source.chapterUrlRule : source.bookUrlRule
+            let bookUrl = applyLegadoRules(JSONPathEvaluator.extractAttribute(from: node, rule: bookUrlRule), bookUrlRule)
+            let intro = applyLegadoRules(JSONPathEvaluator.extractAttribute(from: node, rule: source.introRule), source.introRule)
+            results.append(OnlineSearchResult(
+                title: title,
+                author: author,
+                bookUrl: resolvedURL(path: bookUrl, base: source.url).absoluteString,
+                intro: intro.isEmpty == false ? intro : nil,
+                sourceId: source.id,
+                sourceName: source.name
+            ))
+        }
+        return results
+    }
+
+    private func applyLegadoRules(_ text: String, _ rule: String) -> String {
+        var result = text
+
+        if let replaceRange = rule.range(of: "##") {
+            let afterHashes = String(rule[replaceRange.upperBound...])
+            let parts = afterHashes.split(separator: "|", maxSplits: 1).map(String.init)
+            if let pattern = parts.first, pattern.isEmpty == false {
+                let replacement = parts.count > 1 ? parts[1] : ""
+                if let regex = try? NSRegularExpression(pattern: pattern) {
+                    let range = NSRange(result.startIndex..., in: result)
+                    result = regex.stringByReplacingMatches(in: result, range: range, withTemplate: replacement)
+                }
+            }
+        }
+
+        if let putRange = rule.range(of: "@put:{") {
+            _ = putRange
+        }
+
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private func parseContent(html: String, source: BookSource, ruleType: SourceRuleType) throws -> String {
         switch ruleType {
         case .css:
@@ -461,6 +516,16 @@ enum SourceRuleType {
             return .xpath
         }
 
+        if trimmed.hasPrefix(".") && trimmed.contains("[") {
+            return .jsonpath
+        }
+
+        if trimmed.contains("##") || trimmed.contains("@put:") {
+            if trimmed.hasPrefix(".") || trimmed.hasPrefix("$") {
+                return .jsonpath
+            }
+        }
+
         return .css
     }
 
@@ -470,6 +535,16 @@ enum SourceRuleType {
             result = String(result.dropFirst("@xpath:".count))
         } else if result.lowercased().hasPrefix("xpath:") {
             result = String(result.dropFirst("xpath:".count))
+        }
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func stripJSONPathPrefix(_ rule: String) -> String {
+        var result = rule.trimmingCharacters(in: .whitespacesAndNewlines)
+        if result.lowercased().hasPrefix("@json:") {
+            result = String(result.dropFirst("@json:".count))
+        } else if result.lowercased().hasPrefix("json:") {
+            result = String(result.dropFirst("json:".count))
         }
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }

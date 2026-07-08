@@ -6,9 +6,16 @@ struct BookSourceManagePanel: View {
 
     @State private var urlInput = ""
     @State private var showURLInput = false
+    @State private var filterText = ""
 
     private var theme: ReadingTheme { model.readingSettings.theme }
     private var enabledCount: Int { model.bookSources.filter { $0.isEnabled }.count }
+    private var filteredSources: [BookSource] {
+        if filterText.isEmpty { return model.bookSources }
+        return model.bookSources.filter {
+            $0.name.localizedCaseInsensitiveContains(filterText) || $0.url.localizedCaseInsensitiveContains(filterText)
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -148,19 +155,38 @@ struct BookSourceManagePanel: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 30)
             } else {
+                HStack(spacing: 8) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+
+                    TextField("筛选书源", text: $filterText)
+                        .font(.system(size: 12, weight: .medium))
+                        .textFieldStyle(.plain)
+                        .foregroundStyle(Color.readerInk(for: theme))
+                }
+                .padding(.horizontal, 10)
+                .frame(height: 30)
+                .background(Color.readerPaper(for: theme).opacity(0.6))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .padding(.horizontal, 20)
+                .padding(.top, 10)
+
                 ScrollView {
                     VStack(spacing: 5) {
-                        ForEach(model.bookSources) { source in
+                        ForEach(filteredSources) { source in
                             BookSourceRow(source: source)
                         }
                     }
                     .padding(.vertical, 8)
+                    .padding(.horizontal, 20)
                 }
-                .frame(maxHeight: 280)
+                .frame(maxHeight: 360)
             }
         }
         .background(Color.readerPanel(for: theme))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .frame(width: 380)
     }
 }
 
@@ -217,11 +243,14 @@ private struct BookSourceRow: View {
                 model.deleteSource(id: source.id)
             } label: {
                 Image(systemName: "trash")
-                    .font(.system(size: 11, weight: .medium))
-                    .frame(width: 24, height: 24)
+                    .font(.system(size: 12, weight: .semibold))
+                    .frame(width: 28, height: 28)
+                    .background(Color.red.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             }
             .buttonStyle(.plain)
-            .foregroundStyle(.secondary.opacity(0.6))
+            .foregroundStyle(Color.red.opacity(0.7))
+            .help("删除书源")
         }
         .padding(.horizontal, 12)
         .frame(height: 46)
