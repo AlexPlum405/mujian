@@ -48,7 +48,6 @@ struct BookShelfView: View {
             if isSourcesPresented {
                 BookShelfOverlay {
                     BookSourceManagePanel { isSourcesPresented = false }
-                        .frame(width: 380)
                 } onTapOutside: {
                     isSourcesPresented = false
                 }

@@ -605,6 +605,40 @@ final class ReaderModel: ObservableObject {
         bookSources = bookRepository.loadAllSources()
     }
 
+    func setSourcesEnabled(_ enabled: Bool, ids: [String]) {
+        for id in ids {
+            if var source = bookSources.first(where: { $0.id == id }) {
+                source.isEnabled = enabled
+                bookRepository.saveSource(source)
+            }
+        }
+        bookSources = bookRepository.loadAllSources()
+    }
+
+    func setAllSourcesEnabled(_ enabled: Bool) {
+        for var source in bookSources {
+            if source.isEnabled != enabled {
+                source.isEnabled = enabled
+                bookRepository.saveSource(source)
+            }
+        }
+        bookSources = bookRepository.loadAllSources()
+    }
+
+    func deleteSources(ids: [String]) {
+        for id in ids {
+            bookRepository.deleteSource(id: id)
+        }
+        bookSources = bookRepository.loadAllSources()
+    }
+
+    func deleteAllSources() {
+        for source in bookSources {
+            bookRepository.deleteSource(id: source.id)
+        }
+        bookSources = bookRepository.loadAllSources()
+    }
+
     func searchOnline(query: String) {
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.isEmpty == false else {

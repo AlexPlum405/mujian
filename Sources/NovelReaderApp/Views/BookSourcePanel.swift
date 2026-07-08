@@ -7,186 +7,389 @@ struct BookSourceManagePanel: View {
     @State private var urlInput = ""
     @State private var showURLInput = false
     @State private var filterText = ""
+    @State private var filterMode: SourceFilterMode = .all
+    @State private var selectedIds: Set<String> = []
+    @State private var isSelectMode = false
 
     private var theme: ReadingTheme { model.readingSettings.theme }
     private var enabledCount: Int { model.bookSources.filter { $0.isEnabled }.count }
+    private var disabledCount: Int { model.bookSources.filter { $0.isEnabled == false }.count }
+
     private var filteredSources: [BookSource] {
-        if filterText.isEmpty { return model.bookSources }
-        return model.bookSources.filter {
-            $0.name.localizedCaseInsensitiveContains(filterText) || $0.url.localizedCaseInsensitiveContains(filterText)
+        var result = model.bookSources
+        if filterText.isEmpty == false {
+            result = result.filter {
+                $0.name.localizedCaseInsensitiveContains(filterText) || $0.url.localizedCaseInsensitiveContains(filterText)
+            }
         }
+        switch filterMode {
+        case .all:
+            break
+        case .enabled:
+            result = result.filter { $0.isEnabled }
+        case .disabled:
+            result = result.filter { $0.isEnabled == false }
+        }
+        return result
+    }
+
+    private var allFilteredSelected: Bool {
+        filteredSources.isEmpty == false && filteredSources.allSatisfy { selectedIds.contains($0.id) }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("书源")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(Color.readerInk(for: theme))
+            header
 
-                    Text(model.bookSources.isEmpty ? "还没有书源" : "\(model.bookSources.count) 个 · \(enabledCount) 个已启用")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+            importSection
 
-                Spacer()
-
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 12, weight: .semibold))
-                        .frame(width: 28, height: 28)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-            }
-            .padding(20)
-            .overlay(alignment: .bottom) {
-                Rectangle()
-                    .fill(Color.sidebarBorder(for: theme).opacity(0.5))
-                    .frame(height: 1)
-            }
-
-            VStack(spacing: 8) {
-                HStack(spacing: 8) {
-                    Button {
-                        dismiss()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                            model.importBookSourcesViaPicker()
-                        }
-                    } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: "folder")
-                            Text("本地导入")
-                        }
-                        .font(.system(size: 13, weight: .semibold))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 36)
-                    }
-                    .buttonStyle(LocalImportButtonStyle())
-
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.15)) {
-                            showURLInput.toggle()
-                        }
-                    } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: "link")
-                            Text("网络导入")
-                        }
-                        .font(.system(size: 13, weight: .semibold))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 36)
-                    }
-                    .buttonStyle(RemoteImportButtonStyle())
-                }
-
-                if showURLInput {
-                    HStack(spacing: 8) {
-                        TextField("输入书源 JSON 链接", text: $urlInput)
-                            .font(.system(size: 12, weight: .medium))
-                            .textFieldStyle(.plain)
-                            .foregroundStyle(Color.readerInk(for: theme))
-                            .padding(.horizontal, 10)
-                            .frame(height: 32)
-                            .background(Color.readerPaper(for: theme))
-                            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-                            .overlay {
-                                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                                    .stroke(Color.sidebarBorder(for: theme), lineWidth: 1)
-                            }
-
-                        Button {
-                            if let url = URL(string: urlInput) {
-                                model.importBookSourcesFromURL(url)
-                                urlInput = ""
-                                showURLInput = false
-                            }
-                        } label: {
-                            Text("导入")
-                                .font(.system(size: 12, weight: .semibold))
-                                .frame(width: 48, height: 32)
-                        }
-                        .buttonStyle(PanelActionButtonStyle(width: 48))
-                        .disabled(urlInput.isEmpty)
-                    }
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 14)
-            .padding(.bottom, 14)
-            .overlay(alignment: .bottom) {
-                Rectangle()
-                    .fill(Color.sidebarBorder(for: theme).opacity(0.5))
-                    .frame(height: 1)
-            }
-
-            if model.isLoadingOnline {
-                HStack(spacing: 8) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("正在导入…")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 24)
-            } else if model.bookSources.isEmpty {
-                VStack(spacing: 10) {
-                    Image(systemName: "network")
-                        .font(.system(size: 26, weight: .medium))
-                        .foregroundStyle(Color.readerAccent)
-                        .frame(width: 56, height: 56)
-                        .background(Color.readerAccent.opacity(0.12))
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-
-                    Text("还没有书源")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(Color.readerInk(for: theme))
-
-                    Text("导入 Legado 书源 JSON 后即可搜索在线书籍")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 30)
+            if model.bookSources.isEmpty {
+                emptyState
             } else {
-                HStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-
-                    TextField("筛选书源", text: $filterText)
-                        .font(.system(size: 12, weight: .medium))
-                        .textFieldStyle(.plain)
-                        .foregroundStyle(Color.readerInk(for: theme))
-                }
-                .padding(.horizontal, 10)
-                .frame(height: 30)
-                .background(Color.readerPaper(for: theme).opacity(0.6))
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .padding(.horizontal, 20)
-                .padding(.top, 10)
-
-                ScrollView {
-                    VStack(spacing: 5) {
-                        ForEach(filteredSources) { source in
-                            BookSourceRow(source: source)
-                        }
-                    }
-                    .padding(.vertical, 8)
-                    .padding(.horizontal, 20)
-                }
-                .frame(maxHeight: 360)
+                toolbar
+                sourceList
             }
         }
         .background(Color.readerPanel(for: theme))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .frame(width: 380)
+        .frame(width: 440)
+    }
+
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("书源")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(Color.readerInk(for: theme))
+
+                Text(model.bookSources.isEmpty ? "还没有书源" : "\(model.bookSources.count) 个 · \(enabledCount) 启用 · \(disabledCount) 禁用")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            if isSelectMode && selectedIds.isEmpty == false {
+                Text("已选 \(selectedIds.count)")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.readerAccent)
+            }
+
+            Button {
+                if isSelectMode {
+                    selectedIds.removeAll()
+                }
+                isSelectMode.toggle()
+            } label: {
+                Text(isSelectMode ? "完成" : "管理")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(isSelectMode ? Color.readerAccent : .secondary)
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .semibold))
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+        }
+        .padding(20)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color.sidebarBorder(for: theme).opacity(0.5))
+                .frame(height: 1)
+        }
+    }
+
+    private var importSection: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                Button {
+                    dismiss()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        model.importBookSourcesViaPicker()
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "folder")
+                        Text("本地导入")
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 36)
+                }
+                .buttonStyle(LocalImportButtonStyle())
+
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        showURLInput.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "link")
+                        Text("网络导入")
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 36)
+                }
+                .buttonStyle(RemoteImportButtonStyle())
+            }
+
+            if showURLInput {
+                HStack(spacing: 8) {
+                    TextField("输入书源 JSON 链接", text: $urlInput)
+                        .font(.system(size: 12, weight: .medium))
+                        .textFieldStyle(.plain)
+                        .foregroundStyle(Color.readerInk(for: theme))
+                        .padding(.horizontal, 10)
+                        .frame(height: 32)
+                        .background(Color.readerPaper(for: theme))
+                        .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .stroke(Color.sidebarBorder(for: theme), lineWidth: 1)
+                        }
+
+                    Button {
+                        if let url = URL(string: urlInput) {
+                            model.importBookSourcesFromURL(url)
+                            urlInput = ""
+                            showURLInput = false
+                        }
+                    } label: {
+                        Text("导入")
+                            .font(.system(size: 12, weight: .semibold))
+                            .frame(width: 48, height: 32)
+                    }
+                    .buttonStyle(PanelActionButtonStyle(width: 48))
+                    .disabled(urlInput.isEmpty)
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 14)
+        .padding(.bottom, 14)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color.sidebarBorder(for: theme).opacity(0.5))
+                .frame(height: 1)
+        }
+    }
+
+    private var toolbar: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+
+                TextField("筛选书源", text: $filterText)
+                    .font(.system(size: 12, weight: .medium))
+                    .textFieldStyle(.plain)
+                    .foregroundStyle(Color.readerInk(for: theme))
+
+                if filterText.isEmpty == false {
+                    Button {
+                        filterText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 10)
+            .frame(height: 30)
+            .background(Color.readerPaper(for: theme).opacity(0.6))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            HStack(spacing: 6) {
+                if isSelectMode {
+                    Button {
+                        if allFilteredSelected {
+                            for source in filteredSources {
+                                selectedIds.remove(source.id)
+                            }
+                        } else {
+                            for source in filteredSources {
+                                selectedIds.insert(source.id)
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: allFilteredSelected ? "checkmark.circle.fill" : "circle")
+                                .font(.system(size: 11))
+                            Text(allFilteredSelected ? "取消全选" : "全选")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .foregroundStyle(Color.readerAccent)
+                        .padding(.horizontal, 8)
+                        .frame(height: 24)
+                        .background(Color.readerAccent.opacity(0.08))
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+
+                    Spacer()
+
+                    Button {
+                        model.setSourcesEnabled(true, ids: Array(selectedIds))
+                        selectedIds.removeAll()
+                    } label: {
+                        Text("启用")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 10)
+                            .frame(height: 24)
+                            .background(Color.green.opacity(0.8))
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(selectedIds.isEmpty)
+
+                    Button {
+                        model.setSourcesEnabled(false, ids: Array(selectedIds))
+                        selectedIds.removeAll()
+                    } label: {
+                        Text("禁用")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 10)
+                            .frame(height: 24)
+                            .background(Color.orange.opacity(0.8))
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(selectedIds.isEmpty)
+
+                    Button {
+                        model.deleteSources(ids: Array(selectedIds))
+                        selectedIds.removeAll()
+                    } label: {
+                        Text("删除")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 10)
+                            .frame(height: 24)
+                            .background(Color.red.opacity(0.8))
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(selectedIds.isEmpty)
+                } else {
+                    SourceFilterChip(label: "全部", count: model.bookSources.count, isActive: filterMode == .all) {
+                        filterMode = .all
+                    }
+                    SourceFilterChip(label: "启用", count: enabledCount, isActive: filterMode == .enabled) {
+                        filterMode = .enabled
+                    }
+                    SourceFilterChip(label: "禁用", count: disabledCount, isActive: filterMode == .disabled) {
+                        filterMode = .disabled
+                    }
+
+                    Spacer()
+
+                    Menu {
+                        Button("全部启用") { model.setAllSourcesEnabled(true) }
+                        Button("全部禁用") { model.setAllSourcesEnabled(false) }
+                        Divider()
+                        Button("删除所有书源", role: .destructive) { model.deleteAllSources() }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .font(.system(size: 14))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 10)
+        .padding(.bottom, 10)
+    }
+
+    private var sourceList: some View {
+        ScrollView {
+            VStack(spacing: 4) {
+                ForEach(filteredSources) { source in
+                    BookSourceRow(
+                        source: source,
+                        isSelectMode: isSelectMode,
+                        isSelected: selectedIds.contains(source.id),
+                        onToggleSelect: {
+                            if selectedIds.contains(source.id) {
+                                selectedIds.remove(source.id)
+                            } else {
+                                selectedIds.insert(source.id)
+                            }
+                        }
+                    )
+                }
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 20)
+        }
+        .frame(maxHeight: 400)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "network")
+                .font(.system(size: 26, weight: .medium))
+                .foregroundStyle(Color.readerAccent)
+                .frame(width: 56, height: 56)
+                .background(Color.readerAccent.opacity(0.12))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+            Text("还没有书源")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color.readerInk(for: theme))
+
+            Text("导入 Legado 书源 JSON 后即可搜索在线书籍")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 30)
+    }
+}
+
+private struct SourceFilterChip: View {
+    let label: String
+    let count: Int
+    let isActive: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 3) {
+                Text(label)
+                    .font(.system(size: 11, weight: isActive ? .semibold : .medium))
+                Text("\(count)")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(isActive ? Color.readerAccent.opacity(0.7) : .secondary)
+            }
+            .foregroundStyle(isActive ? Color.readerAccent : .secondary)
+            .padding(.horizontal, 8)
+            .frame(height: 24)
+            .background(isActive ? Color.readerAccent.opacity(0.1) : Color.clear)
+            .clipShape(Capsule())
+            .overlay {
+                if isActive {
+                    Capsule()
+                        .stroke(Color.readerAccent.opacity(0.2), lineWidth: 0.5)
+                }
+            }
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -215,11 +418,25 @@ private struct RemoteImportButtonStyle: ButtonStyle {
 private struct BookSourceRow: View {
     @EnvironmentObject private var model: ReaderModel
     let source: BookSource
+    let isSelectMode: Bool
+    let isSelected: Bool
+    let onToggleSelect: () -> Void
 
     private var theme: ReadingTheme { model.readingSettings.theme }
 
     var body: some View {
         HStack(spacing: 10) {
+            if isSelectMode {
+                Button {
+                    onToggleSelect()
+                } label: {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 16))
+                        .foregroundStyle(isSelected ? Color.readerAccent : .secondary)
+                }
+                .buttonStyle(.plain)
+            }
+
             VStack(alignment: .leading, spacing: 2) {
                 Text(source.name)
                     .font(.system(size: 13, weight: .semibold))
@@ -234,33 +451,48 @@ private struct BookSourceRow: View {
 
             Spacer()
 
-            MujianToggle(isOn: Binding(
-                get: { source.isEnabled },
-                set: { _ in model.toggleSourceEnabled(source) }
-            ))
+            if isSelectMode == false {
+                MujianToggle(isOn: Binding(
+                    get: { source.isEnabled },
+                    set: { _ in model.toggleSourceEnabled(source) }
+                ))
 
-            Button {
-                model.deleteSource(id: source.id)
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 12, weight: .semibold))
-                    .frame(width: 28, height: 28)
-                    .background(Color.red.opacity(0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                Button {
+                    model.deleteSource(id: source.id)
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 12, weight: .semibold))
+                        .frame(width: 28, height: 28)
+                        .background(Color.red.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.red.opacity(0.7))
+                .help("删除书源")
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(Color.red.opacity(0.7))
-            .help("删除书源")
         }
         .padding(.horizontal, 12)
         .frame(height: 46)
-        .background(Color.readerPaper(for: theme).opacity(0.5))
+        .background(
+            isSelected
+                ? Color.readerAccent.opacity(0.06)
+                : Color.readerPaper(for: theme).opacity(0.5)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .stroke(Color.sidebarBorder(for: theme).opacity(0.5), lineWidth: 1)
+                .stroke(
+                    isSelected ? Color.readerAccent.opacity(0.3) : Color.sidebarBorder(for: theme).opacity(0.5),
+                    lineWidth: 1
+                )
         }
     }
+}
+
+enum SourceFilterMode {
+    case all
+    case enabled
+    case disabled
 }
 
 struct OnlineSearchPanel: View {
