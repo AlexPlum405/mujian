@@ -138,12 +138,24 @@ final class LegadoBookSourceEngine: BookSourceEngine {
             }
             do {
                 let (url, option) = resolvedSearchURL(template: source.searchUrl, query: query, base: source.url)
-                let data = try await fetchData(url: url, option: option)
+                var html: String
+
+                if option.useWebView {
+                    html = try await fetchViaWebView(url: url, method: option.method, body: option.body)
+                } else {
+                    let data = try await fetchData(url: url, option: option)
+                    html = EncodingDetector.decode(data: data, httpCharset: option.charset)
+
+                    if isCloudflareChallenge(html) {
+                        html = try await fetchViaWebView(url: url, method: option.method, body: option.body)
+                    }
+                }
+
                 let parsed: [OnlineSearchResult]
                 if ruleType == .jsonpath {
+                    let data = html.data(using: .utf8) ?? Data()
                     parsed = parseSearchResultsJSON(data: data, source: source)
                 } else {
-                    let html = EncodingDetector.decode(data: data, httpCharset: option.charset)
                     parsed = try parseSearchResults(html: html, source: source, ruleType: ruleType)
                 }
                 results.append(contentsOf: parsed)
@@ -154,6 +166,17 @@ final class LegadoBookSourceEngine: BookSourceEngine {
         return results
     }
 
+    private func isCloudflareChallenge(_ html: String) -> Bool {
+        let lower = html.lowercased()
+        return lower.contains("just a moment") || lower.contains("cf-browser-verification") || lower.contains("cf-challenge") || lower.contains("cloudflare") && lower.contains("challenge")
+    }
+
+    @MainActor
+    private func fetchViaWebView(url: URL, method: String = "GET", body: String? = nil) async throws -> String {
+        let loader = WebViewLoader()
+        return try await loader.load(url: url, method: method, body: body)
+    }
+
     func loadChapterList(bookUrl: String, source: BookSource) async throws -> [OnlineChapter] {
         guard isPaused == false else {
             throw BookSourceError.paused
@@ -162,7 +185,10 @@ final class LegadoBookSourceEngine: BookSourceEngine {
             throw BookSourceError.sourceUnavailable
         }
         let url = resolvedURL(path: bookUrl, base: source.url)
-        let html = try await fetch(url: url)
+        var html = try await fetch(url: url)
+        if isCloudflareChallenge(html) {
+            html = try await fetchViaWebView(url: url)
+        }
         if Task.isCancelled || isPaused {
             throw BookSourceError.paused
         }
@@ -177,7 +203,10 @@ final class LegadoBookSourceEngine: BookSourceEngine {
             throw BookSourceError.sourceUnavailable
         }
         let url = resolvedURL(path: chapterUrl, base: source.url)
-        let html = try await fetch(url: url)
+        var html = try await fetch(url: url)
+        if isCloudflareChallenge(html) {
+            html = try await fetchViaWebView(url: url)
+        }
         if Task.isCancelled || isPaused {
             throw BookSourceError.paused
         }

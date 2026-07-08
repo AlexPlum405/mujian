@@ -6,6 +6,7 @@ struct LegadoUrlOption {
     var charset: String?
     var headers: [String: String] = [:]
     var type: String?
+    var useWebView: Bool = false
 }
 
 enum LegadoUrlParser {
@@ -30,6 +31,9 @@ enum LegadoUrlParser {
                 }
                 if let type = json["type"] as? String {
                     option.type = type
+                }
+                if let useWebView = json["useWebView"] as? Bool {
+                    option.useWebView = useWebView
                 }
                 if let headers = json["headers"] as? [String: Any] {
                     for (key, value) in headers {
