@@ -1,0 +1,12 @@
+.build/
+.swiftpm/
+*.xcodeproj/
+DerivedData/
+dist/
+build/
+*.dmg
+*.pkg
+*.app
+.DS_Store
+design-demos/
+.scratch/

@@ -1,0 +1,65 @@
+[
+  {
+    "bookSourceUrl": "https://www.bqgui.cc",
+    "bookSourceName": "笔趣阁",
+    "enabled": true,
+    "searchUrl": "https://www.bqgui.cc/search.php?q={{searchKey}}",
+    "ruleSearch": {
+      "bookList": "css:.result-item",
+      "name": "css:.bookname a@text",
+      "author": "css:.author@text",
+      "bookUrl": "css:.bookname a@href",
+      "intro": "css:.intro@text"
+    },
+    "ruleToc": {
+      "chapterList": "css:dd a",
+      "chapterName": "@text",
+      "chapterUrl": "@href"
+    },
+    "ruleContent": {
+      "content": "css:#content@text"
+    }
+  },
+  {
+    "bookSourceUrl": "https://www.xbiquge.la",
+    "bookSourceName": "新笔趣阁",
+    "enabled": true,
+    "searchUrl": "https://www.xbiquge.la/modules/article/waps.php?searchkey={{searchKey}}",
+    "ruleSearch": {
+      "bookList": "css:tr",
+      "name": "css:.even a@text",
+      "author": "css:.even:first-child@text",
+      "bookUrl": "css:.even a@href",
+      "intro": ""
+    },
+    "ruleToc": {
+      "chapterList": "css:dd a",
+      "chapterName": "@text",
+      "chapterUrl": "@href"
+    },
+    "ruleContent": {
+      "content": "css:#content@text"
+    }
+  },
+  {
+    "bookSourceUrl": "https://www.69shu.com",
+    "bookSourceName": "69书吧",
+    "enabled": true,
+    "searchUrl": "https://www.69shu.com/modules/article/search.php?searchkey={{searchKey}}",
+    "ruleSearch": {
+      "bookList": "css:.newbox",
+      "name": "css:lab a@text",
+      "author": "css:lab a:last-child@text",
+      "bookUrl": "css:lab a@href",
+      "intro": ""
+    },
+    "ruleToc": {
+      "chapterList": "css:.mulu_list a",
+      "chapterName": "@text",
+      "chapterUrl": "@href"
+    },
+    "ruleContent": {
+      "content": "css:.txtnav@text"
+    }
+  }
+]
