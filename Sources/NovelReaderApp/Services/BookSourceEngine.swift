@@ -137,13 +137,13 @@ final class LegadoBookSourceEngine: BookSourceEngine {
                 continue
             }
             do {
-                let url = resolvedSearchURL(template: source.searchUrl, query: query, base: source.url)
-                let data = try await fetchData(url: url)
+                let (url, option) = resolvedSearchURL(template: source.searchUrl, query: query, base: source.url)
+                let data = try await fetchData(url: url, option: option)
                 let parsed: [OnlineSearchResult]
                 if ruleType == .jsonpath {
                     parsed = parseSearchResultsJSON(data: data, source: source)
                 } else {
-                    let html = String(data: data, encoding: .utf8) ?? String(decoding: data, as: UTF8.self)
+                    let html = EncodingDetector.decode(data: data, httpCharset: option.charset)
                     parsed = try parseSearchResults(html: html, source: source, ruleType: ruleType)
                 }
                 results.append(contentsOf: parsed)
@@ -196,9 +196,27 @@ final class LegadoBookSourceEngine: BookSourceEngine {
         isPaused = false
     }
 
-    private func fetchData(url: URL) async throws -> Data {
+    private func fetchData(url: URL, option: LegadoUrlOption? = nil) async throws -> Data {
         var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
         request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", forHTTPHeaderField: "User-Agent")
+
+        if let option {
+            if option.method == "POST" {
+                request.httpMethod = "POST"
+                if let body = option.body {
+                    if body.contains("{") && body.contains("}") {
+                        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                    } else {
+                        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+                    }
+                    request.httpBody = body.data(using: .utf8)
+                }
+            }
+            for (key, value) in option.headers {
+                request.setValue(value, forHTTPHeaderField: key)
+            }
+        }
+
         do {
             let (data, response) = try await session.data(for: request)
             if let http = response as? HTTPURLResponse, (400...499).contains(http.statusCode) {
@@ -214,54 +232,19 @@ final class LegadoBookSourceEngine: BookSourceEngine {
 
     private func fetch(url: URL) async throws -> String {
         let data = try await fetchData(url: url)
-        if let text = String(data: data, encoding: .utf8) {
-            return text
-        }
-        if let text = String(data: data, encoding: .isoLatin1) {
-            return text
-        }
-        return String(decoding: data, as: UTF8.self)
+        return EncodingDetector.decode(data: data)
     }
 
-    private func resolvedSearchURL(template: String, query: String, base: String) -> URL {
-        var raw = template.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        if let braceIndex = raw.firstIndex(of: "{") {
-            raw = String(raw[..<braceIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-
-        if let commaIndex = raw.firstIndex(of: ",") {
-            let beforeComma = String(raw[..<commaIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
-            if beforeComma.contains("://") {
-                raw = beforeComma
-            }
-        }
-
-        let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
-        raw = raw
-            .replacingOccurrences(of: "{{searchKey}}", with: encoded)
-            .replacingOccurrences(of: "{{key}}", with: encoded)
-            .replacingOccurrences(of: "searchKey", with: encoded)
-
-        return resolvedURL(path: raw, base: base)
+    private func resolvedSearchURL(template: String, query: String, base: String) -> (url: URL, option: LegadoUrlOption) {
+        let (rawUrl, option) = LegadoUrlParser.parse(template, searchKey: query)
+        let absolute = LegadoUrlParser.resolveURL(base: base, relative: rawUrl)
+        let url = URL(string: absolute) ?? URL(string: base)!
+        return (url, option)
     }
 
     private func resolvedURL(path: String, base: String) -> URL {
-        let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let url = URL(string: trimmed), url.scheme != nil {
-            return url
-        }
-        if let baseURL = URL(string: base) {
-            if trimmed.hasPrefix("//") {
-                let scheme = baseURL.scheme ?? "https"
-                return URL(string: "\(scheme):\(trimmed)") ?? URL(string: base)!
-            }
-            let baseString = "\(baseURL.scheme ?? "https")://\(baseURL.host ?? "")\(baseURL.path)"
-            let cleanPath = trimmed.hasPrefix("/") ? trimmed : "/\(trimmed)"
-            let combined = baseString + cleanPath
-            return URL(string: combined) ?? URL(string: base)!
-        }
-        return URL(fileURLWithPath: trimmed)
+        let absolute = LegadoUrlParser.resolveURL(base: base, relative: path)
+        return URL(string: absolute) ?? URL(string: base)!
     }
 
     private func parseSearchResults(html: String, source: BookSource, ruleType: SourceRuleType) throws -> [OnlineSearchResult] {
