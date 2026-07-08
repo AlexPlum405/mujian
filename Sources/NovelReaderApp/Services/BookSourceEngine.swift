@@ -375,18 +375,27 @@ final class LegadoBookSourceEngine: BookSourceEngine {
 
         if let replaceRange = rule.range(of: "##") {
             let afterHashes = String(rule[replaceRange.upperBound...])
-            let parts = afterHashes.split(separator: "|", maxSplits: 1).map(String.init)
-            if let pattern = parts.first, pattern.isEmpty == false {
-                let replacement = parts.count > 1 ? parts[1] : ""
-                if let regex = try? NSRegularExpression(pattern: pattern) {
-                    let range = NSRange(result.startIndex..., in: result)
-                    result = regex.stringByReplacingMatches(in: result, range: range, withTemplate: replacement)
+            let segments = afterHashes.split(separator: "|", maxSplits: 1).map(String.init)
+
+            if segments.count == 1 {
+                let patterns = segments[0].split(separator: "@").map(String.init)
+                let replacement = ""
+                for pattern in patterns {
+                    if pattern.isEmpty == false, let regex = try? NSRegularExpression(pattern: pattern) {
+                        let range = NSRange(result.startIndex..., in: result)
+                        result = regex.stringByReplacingMatches(in: result, range: range, withTemplate: replacement)
+                    }
+                }
+            } else if segments.count == 2 {
+                let patterns = segments[0].split(separator: "@").map(String.init)
+                let replacement = segments[1]
+                for pattern in patterns {
+                    if pattern.isEmpty == false, let regex = try? NSRegularExpression(pattern: pattern) {
+                        let range = NSRange(result.startIndex..., in: result)
+                        result = regex.stringByReplacingMatches(in: result, range: range, withTemplate: replacement)
+                    }
                 }
             }
-        }
-
-        if let putRange = rule.range(of: "@put:{") {
-            _ = putRange
         }
 
         return result.trimmingCharacters(in: .whitespacesAndNewlines)

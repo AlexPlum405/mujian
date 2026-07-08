@@ -26,6 +26,7 @@ enum JSONPathEvaluator {
         }
 
         var working: Any = object
+        var firstIteration = true
 
         while current.isEmpty == false {
             if current.hasPrefix(".") {
@@ -43,9 +44,16 @@ enum JSONPathEvaluator {
                     } else {
                         return []
                     }
+                } else if indexStr == "*" {
+                    if let array = working as? [Any] {
+                        return array.flatMap { extractNodes(from: $0) }
+                    } else {
+                        return []
+                    }
                 } else {
                     return []
                 }
+                firstIteration = false
                 continue
             }
 
@@ -61,7 +69,8 @@ enum JSONPathEvaluator {
             let key = String(current[..<keyEnd])
             current = String(current[keyEnd...])
 
-            if key == "*" || key.isEmpty {
+            if key == "*" || (key.isEmpty && firstIteration) {
+                firstIteration = false
                 continue
             }
 
@@ -74,6 +83,7 @@ enum JSONPathEvaluator {
             } else {
                 return []
             }
+            firstIteration = false
         }
 
         return extractNodes(from: working)
