@@ -436,7 +436,7 @@ private struct DeskBookCard: View {
             .help(book.helpPath)
 
             if isHovered {
-                BookCardDeleteButton(bookId: book.id)
+                BookCardDeleteButton(bookId: book.id, book: book)
                     .padding(8)
                     .transition(.opacity)
             }
@@ -543,7 +543,7 @@ private struct SpineFeatureCard: View {
             .help(book.helpPath)
 
             if isHovered {
-                BookCardDeleteButton(bookId: book.id)
+                BookCardDeleteButton(bookId: book.id, book: book)
                     .padding(10)
                     .transition(.opacity)
             }
@@ -916,7 +916,7 @@ private struct DrawerBookRow: View {
             .help(book.helpPath)
 
             if isHovered {
-                BookCardDeleteButton(bookId: book.id)
+                BookCardDeleteButton(bookId: book.id, book: book)
                     .padding(.trailing, 10)
                     .transition(.opacity)
             }
@@ -983,7 +983,7 @@ private struct DrawerDetailCard: View {
             .background(Color.sidebarBackground(for: model.readingSettings.theme).opacity(0.62))
 
             if isHovered {
-                BookCardDeleteButton(bookId: book.id)
+                BookCardDeleteButton(bookId: book.id, book: book)
                     .padding(10)
                     .transition(.opacity)
             }
@@ -1158,10 +1158,21 @@ private struct ProgressStrip: View {
 private struct BookCardDeleteButton: View {
     @EnvironmentObject private var model: ReaderModel
     let bookId: UUID
+    let book: Book
+    @State private var showDeleteConfirm = false
+
+    private var isLocal: Bool {
+        if case .local = book.origin { return true }
+        return false
+    }
 
     var body: some View {
         Button {
-            model.deleteBook(id: bookId)
+            if isLocal {
+                showDeleteConfirm = true
+            } else {
+                model.deleteBook(id: bookId)
+            }
         } label: {
             Image(systemName: "xmark")
                 .font(.system(size: 10, weight: .bold))
@@ -1176,6 +1187,21 @@ private struct BookCardDeleteButton: View {
         }
         .buttonStyle(.plain)
         .help("移除")
+        .confirmationDialog(
+            "删除《\(book.title)》",
+            isPresented: $showDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("从书架移除", role: .destructive) {
+                model.removeFromShelf(id: bookId)
+            }
+            Button("删除本地文件", role: .destructive) {
+                model.deleteBook(id: bookId)
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("从书架移除只删书架记录，本地文件保留。\n删除本地文件会同时移除书架记录和磁盘上的 txt 文件。")
+        }
     }
 }
 

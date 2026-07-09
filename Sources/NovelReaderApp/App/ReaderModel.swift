@@ -288,6 +288,12 @@ final class ReaderModel: ObservableObject {
         books = bookRepository.loadAllBooks()
     }
 
+    func removeFromShelf(id: UUID) {
+        bookRepository.deleteBook(id: id)
+        chapterCountCache.removeValue(forKey: id)
+        books = bookRepository.loadAllBooks()
+    }
+
     func showBookshelf() {
         activePanel = nil
         exitBossKeyRecording()
