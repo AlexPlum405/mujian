@@ -733,10 +733,6 @@ private struct DrawerBookShelfLayout: View {
 
             VStack(spacing: 0) {
                 DrawerBookList(books: books, requestDelete: requestDelete)
-
-                if let firstBook = books.first {
-                    DrawerDetailCard(book: firstBook, requestDelete: requestDelete)
-                }
             }
         }
         .background(Color.readerPanel(for: model.readingSettings.theme).opacity(0.42))
