@@ -130,39 +130,53 @@ final class LegadoBookSourceEngine: BookSourceEngine {
     }
 
     func search(query: String, sources: [BookSource]) async -> [OnlineSearchResult] {
+        let enabledSources = sources.filter { $0.isEnabled }
+
         var results: [OnlineSearchResult] = []
-        for source in sources where source.isEnabled {
-            if isPaused { break }
+        var runningTasks: [Task<[OnlineSearchResult], Never>] = []
+
+        for source in enabledSources {
             guard let ruleType = SourceRuleType.detect(source.searchRule), ruleType != .unknown else {
                 continue
             }
-            do {
-                let (url, option) = resolvedSearchURL(template: source.searchUrl, query: query, base: source.url)
-                var html: String
 
-                if option.useWebView {
-                    html = try await fetchViaWebView(url: url, method: option.method, body: option.body)
-                } else {
-                    let data = try await fetchData(url: url, option: option)
-                    html = EncodingDetector.decode(data: data, httpCharset: option.charset)
+            let task = Task<[OnlineSearchResult], Never> {
+                if Task.isCancelled || self.isPaused { return [] }
+                do {
+                    let (url, option) = self.resolvedSearchURL(template: source.searchUrl, query: query, base: source.url)
+                    var html: String
 
-                    if isCloudflareChallenge(html) {
-                        html = try await fetchViaWebView(url: url, method: option.method, body: option.body)
+                    if option.useWebView {
+                        html = try await self.fetchViaWebView(url: url, method: option.method, body: option.body)
+                    } else {
+                        let data = try await self.fetchData(url: url, option: option)
+                        html = EncodingDetector.decode(data: data, httpCharset: option.charset)
+
+                        if self.isCloudflareChallenge(html) {
+                            html = try await self.fetchViaWebView(url: url, method: option.method, body: option.body)
+                        }
                     }
-                }
 
-                let parsed: [OnlineSearchResult]
-                if ruleType == .jsonpath {
-                    let data = html.data(using: .utf8) ?? Data()
-                    parsed = parseSearchResultsJSON(data: data, source: source)
-                } else {
-                    parsed = try parseSearchResults(html: html, source: source, ruleType: ruleType)
+                    let parsed: [OnlineSearchResult]
+                    if ruleType == .jsonpath {
+                        let data = html.data(using: .utf8) ?? Data()
+                        parsed = self.parseSearchResultsJSON(data: data, source: source)
+                    } else {
+                        parsed = try self.parseSearchResults(html: html, source: source, ruleType: ruleType)
+                    }
+                    return parsed
+                } catch {
+                    return []
                 }
-                results.append(contentsOf: parsed)
-            } catch {
-                continue
             }
+            runningTasks.append(task)
         }
+
+        for task in runningTasks {
+            let partial = await task.value
+            results.append(contentsOf: partial)
+        }
+
         return results
     }
 
@@ -226,7 +240,7 @@ final class LegadoBookSourceEngine: BookSourceEngine {
     }
 
     private func fetchData(url: URL, option: LegadoUrlOption? = nil) async throws -> Data {
-        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 10)
         request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", forHTTPHeaderField: "User-Agent")
 
         if let option {

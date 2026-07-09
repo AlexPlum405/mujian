@@ -21,7 +21,7 @@ final class WebViewLoader: NSObject, WKNavigationDelegate {
         webView.customUserAgent = userAgent
     }
 
-    func load(url: URL, method: String = "GET", body: String? = nil, timeout: TimeInterval = 20) async throws -> String {
+    func load(url: URL, method: String = "GET", body: String? = nil, timeout: TimeInterval = 12) async throws -> String {
         try await withCheckedThrowingContinuation { continuation in
             self.continuation = continuation
             self.finishedFlag = false
