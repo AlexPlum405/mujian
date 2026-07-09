@@ -5,80 +5,16 @@
     "enabled": true,
     "searchUrl": "https://www.22biqu.com/ss/,{\"method\":\"POST\",\"body\":\"searchkey={{searchKey}}&Submit=搜索\"}",
     "ruleSearch": {
-      "bookList": "css:ul.txt-list > li",
-      "name": "css:span.s2 > a@text",
-      "author": "css:span.s4@text",
-      "bookUrl": "css:span.s2 > a@href",
+      "bookList": "css:ul.txt-list li",
+      "name": "span.s2 a@text",
+      "author": "span.s4@text",
+      "bookUrl": "span.s2 a@href",
       "intro": "",
-      "kind": "css:span.s1@text",
-      "lastChapter": "css:span.s3 > a@text"
+      "kind": "span.s1@text",
+      "lastChapter": "span.s3 a@text"
     },
     "ruleToc": {
-      "chapterList": "css:dd a",
-      "chapterName": "@text",
-      "chapterUrl": "@href"
-    },
-    "ruleContent": {
-      "content": "css:#content@text"
-    }
-  },
-  {
-    "bookSourceUrl": "https://www.shuhaige.net/",
-    "bookSourceName": "书海阁小说网",
-    "enabled": true,
-    "searchUrl": "https://www.shuhaige.net/search.html,{\"method\":\"POST\",\"body\":\"searchkey={{searchKey}}&searchtype=all\"}",
-    "ruleSearch": {
-      "bookList": "css:#sitembox > dl",
-      "name": "css:dd > h3 > a@text",
-      "author": "css:dd:nth-child(3) > span:nth-child(1)@text",
-      "bookUrl": "css:dd > h3 > a@href",
-      "intro": "",
-      "kind": "css:dd:nth-child(3) > span:nth-child(3)@text"
-    },
-    "ruleToc": {
-      "chapterList": "css:dl > dt:nth-of-type(2) ~ dd > a",
-      "chapterName": "@text",
-      "chapterUrl": "@href"
-    },
-    "ruleContent": {
-      "content": "css:#content@text"
-    }
-  },
-  {
-    "bookSourceUrl": "https://www.ranwen8.cc/",
-    "bookSourceName": "燃文小说网",
-    "enabled": true,
-    "searchUrl": "https://www.ranwen8.cc/modules/article/search.php,{\"method\":\"POST\",\"body\":\"searchkey={{searchKey}}\"}",
-    "ruleSearch": {
-      "bookList": "css:.result-list > div",
-      "name": "css:.bookname > a@text",
-      "author": "css:.author@text",
-      "bookUrl": "css:.bookname > a@href",
-      "intro": "css:.intro@text"
-    },
-    "ruleToc": {
-      "chapterList": "css:dd a",
-      "chapterName": "@text",
-      "chapterUrl": "@href"
-    },
-    "ruleContent": {
-      "content": "css:#content@text"
-    }
-  },
-  {
-    "bookSourceUrl": "https://www.dxmwx.org/",
-    "bookSourceName": "大熊猫文学",
-    "enabled": true,
-    "searchUrl": "https://www.dxmwx.org/search.php,{\"method\":\"POST\",\"body\":\"searchkey={{searchKey}}\"}",
-    "ruleSearch": {
-      "bookList": "css:.result-list > div",
-      "name": "css:.bookname a@text",
-      "author": "css:.author@text",
-      "bookUrl": "css:.bookname a@href",
-      "intro": "css:.intro@text"
-    },
-    "ruleToc": {
-      "chapterList": "css:dd a",
+      "chapterList": "css:li > a",
       "chapterName": "@text",
       "chapterUrl": "@href"
     },

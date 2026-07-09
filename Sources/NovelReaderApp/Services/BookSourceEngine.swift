@@ -246,15 +246,32 @@ final class LegadoBookSourceEngine: BookSourceEngine {
             if parts.count == 2 {
                 let key = String(parts[0])
                 let value = String(parts[1])
-                let encodedValue = value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value
-                return "\(key)=\(encodedValue)"
+                return "\(key)=\(percentEncodeFormValue(value))"
             }
             return String(pair)
         }
         return encoded.joined(separator: "&")
     }
 
-    private func fetchData(url: URL, option: LegadoUrlOption? = nil) async throws -> Data {
+    private func percentEncodeFormValue(_ value: String) -> String {
+        if value.contains("%") && isPercentEncoded(value) {
+            return value
+        }
+        var allowed = CharacterSet.urlQueryAllowed
+        allowed.remove(charactersIn: "&=;+")
+        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+    }
+
+    private func isPercentEncoded(_ value: String) -> Bool {
+        let pattern = "%[0-9A-Fa-f]{2}"
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return false }
+        let range = NSRange(value.startIndex..., in: value)
+        let matches = regex.matches(in: value, range: range)
+        let nonPercentCount = value.count - matches.reduce(0) { $0 + ($1.range.length) }
+        return matches.count > 0 && nonPercentCount < value.count
+    }
+
+    func fetchData(url: URL, option: LegadoUrlOption? = nil) async throws -> Data {
         var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 10)
         request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", forHTTPHeaderField: "User-Agent")
 
@@ -307,13 +324,18 @@ final class LegadoBookSourceEngine: BookSourceEngine {
         return URL(string: absolute) ?? URL(string: base)!
     }
 
+    func parseSearchResultsForTest(html: String, source: BookSource, ruleType: SourceRuleType) throws -> [OnlineSearchResult] {
+        try parseSearchResults(html: html, source: source, ruleType: ruleType)
+    }
+
     private func parseSearchResults(html: String, source: BookSource, ruleType: SourceRuleType) throws -> [OnlineSearchResult] {
         var results: [OnlineSearchResult] = []
 
         switch ruleType {
         case .css:
             let doc = try SwiftSoup.parse(html)
-            let nodes = try doc.select(source.searchRule)
+            let cssRule = SourceRuleType.stripCSSPrefix(source.searchRule)
+            let nodes = try doc.select(cssRule)
             for node in nodes {
                 let title = (try? extractCSS(from: node, rule: source.titleRule)) ?? ""
                 if title.isEmpty { continue }
@@ -361,7 +383,8 @@ final class LegadoBookSourceEngine: BookSourceEngine {
         switch ruleType {
         case .css:
             let doc = try SwiftSoup.parse(html)
-            let nodes = try doc.select(source.chapterListRule)
+            let cssRule = SourceRuleType.stripCSSPrefix(source.chapterListRule)
+            let nodes = try doc.select(cssRule)
             for node in nodes {
                 let title = (try? extractCSS(from: node, rule: source.chapterTitleRule)) ?? ""
                 let url = try extractCSS(from: node, rule: source.chapterUrlRule)
@@ -448,7 +471,20 @@ final class LegadoBookSourceEngine: BookSourceEngine {
         switch ruleType {
         case .css:
             let doc = try SwiftSoup.parse(html)
-            let nodes = try doc.select(source.contentRule)
+            let rawRule = SourceRuleType.stripCSSPrefix(source.contentRule)
+            if let atIndex = rawRule.lastIndex(of: "@") {
+                let selector = String(rawRule[..<atIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+                let attr = String(rawRule[rawRule.index(after: atIndex)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+                let nodes = try doc.select(selector)
+                if attr.isEmpty || attr == "text" {
+                    return try nodes.text()
+                }
+                if attr == "html" || attr == "innerHTML" {
+                    return try nodes.html()
+                }
+                return try nodes.attr(attr)
+            }
+            let nodes = try doc.select(rawRule)
             return try nodes.text()
         case .xpath:
             let xpath = SourceRuleType.stripXPathPrefix(source.contentRule)
@@ -460,7 +496,7 @@ final class LegadoBookSourceEngine: BookSourceEngine {
     }
 
     private func extractCSS(from element: Element, rule: String) throws -> String {
-        var trimmed = rule.trimmingCharacters(in: .whitespacesAndNewlines)
+        var trimmed = SourceRuleType.stripCSSPrefix(rule)
         if trimmed.hasPrefix("*") {
             trimmed = String(trimmed.dropFirst())
         }
@@ -469,13 +505,18 @@ final class LegadoBookSourceEngine: BookSourceEngine {
             let selector = String(trimmed[..<atIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
             let attr = String(trimmed[trimmed.index(after: atIndex)...]).trimmingCharacters(in: .whitespacesAndNewlines)
 
-            let target: Element
             if selector.isEmpty {
-                target = element
-            } else if let selected = try element.select(selector).first() {
-                target = selected
-            } else {
-                target = element
+                if attr.isEmpty || attr == "text" {
+                    return try element.text()
+                }
+                if attr == "html" || attr == "innerHTML" {
+                    return try element.html()
+                }
+                return try element.attr(attr)
+            }
+
+            guard let target = try element.select(selector).first() else {
+                return ""
             }
 
             if attr.isEmpty || attr == "text" {
@@ -587,6 +628,16 @@ enum SourceRuleType {
             result = String(result.dropFirst("@xpath:".count))
         } else if result.lowercased().hasPrefix("xpath:") {
             result = String(result.dropFirst("xpath:".count))
+        }
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func stripCSSPrefix(_ rule: String) -> String {
+        var result = rule.trimmingCharacters(in: .whitespacesAndNewlines)
+        if result.lowercased().hasPrefix("@css:") {
+            result = String(result.dropFirst("@css:".count))
+        } else if result.lowercased().hasPrefix("css:") {
+            result = String(result.dropFirst("css:".count))
         }
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
