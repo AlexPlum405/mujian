@@ -125,7 +125,6 @@ final class StubBookSourceEngine: BookSourceEngine {
     }
 }
 
-@MainActor
 final class LegadoBookSourceEngine: BookSourceEngine {
     @Published private(set) var isPaused = false
 
@@ -395,9 +394,11 @@ final class LegadoBookSourceEngine: BookSourceEngine {
                 let title = (try? extractCSS(from: node, rule: source.chapterTitleRule)) ?? ""
                 let url = try extractCSS(from: node, rule: source.chapterUrlRule)
                 guard url.isEmpty == false else { continue }
+                let absoluteUrl = resolvedURL(path: url, base: source.url).absoluteString
+                guard isLikelyChapterUrl(absoluteUrl, title: title) else { continue }
                 chapters.append(OnlineChapter(
                     title: title.isEmpty ? "未命名章节" : title,
-                    url: resolvedURL(path: url, base: source.url).absoluteString
+                    url: absoluteUrl
                 ))
             }
         case .xpath:
@@ -407,9 +408,11 @@ final class LegadoBookSourceEngine: BookSourceEngine {
                 let title = extractXPath(from: node, rule: source.chapterTitleRule)
                 let url = extractXPath(from: node, rule: source.chapterUrlRule)
                 guard url.isEmpty == false else { continue }
+                let absoluteUrl = resolvedURL(path: url, base: source.url).absoluteString
+                guard isLikelyChapterUrl(absoluteUrl, title: title) else { continue }
                 chapters.append(OnlineChapter(
                     title: title.isEmpty ? "未命名章节" : title,
-                    url: resolvedURL(path: url, base: source.url).absoluteString
+                    url: absoluteUrl
                 ))
             }
         default:
@@ -478,20 +481,31 @@ final class LegadoBookSourceEngine: BookSourceEngine {
         case .css:
             let doc = try SwiftSoup.parse(html)
             let rawRule = SourceRuleType.stripCSSPrefix(source.contentRule)
+            let selector: String
+            let attr: String
+
             if let atIndex = rawRule.lastIndex(of: "@") {
-                let selector = String(rawRule[..<atIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
-                let attr = String(rawRule[rawRule.index(after: atIndex)...]).trimmingCharacters(in: .whitespacesAndNewlines)
-                let nodes = try doc.select(selector)
-                if attr.isEmpty || attr == "text" {
-                    return try nodes.text()
-                }
-                if attr == "html" || attr == "innerHTML" {
-                    return try nodes.html()
-                }
-                return try nodes.attr(attr)
+                selector = String(rawRule[..<atIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+                attr = String(rawRule[rawRule.index(after: atIndex)...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            } else {
+                selector = rawRule
+                attr = "text"
             }
-            let nodes = try doc.select(rawRule)
-            return try nodes.text()
+
+            let nodes = try doc.select(selector)
+
+            if attr == "html" || attr == "innerHTML" {
+                let htmlContent = try nodes.html()
+                return formatHTMLContent(htmlContent)
+            }
+
+            if attr.isEmpty || attr == "text" {
+                let htmlContent = try nodes.html()
+                return formatHTMLContent(htmlContent)
+            }
+
+            return try nodes.attr(attr)
+
         case .xpath:
             let xpath = SourceRuleType.stripXPathPrefix(source.contentRule)
             let nodes = XPathEvaluator.evaluate(html: html, xpath: xpath)
@@ -499,6 +513,66 @@ final class LegadoBookSourceEngine: BookSourceEngine {
         default:
             return ""
         }
+    }
+
+    private func isLikelyChapterUrl(_ url: String, title: String) -> Bool {
+        if url.contains("fenlei") || url.contains("category") || url.contains("list") {
+            return false
+        }
+        if url.hasSuffix("/") || url.hasSuffix("/index.html") || url.hasSuffix("/index.htm") {
+            return false
+        }
+        let titleTrimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if titleTrimmed.contains("小说") || titleTrimmed.contains("首页") || titleTrimmed.contains("排行") || titleTrimmed.contains("分类") {
+            return false
+        }
+        if titleTrimmed.contains("书架") || titleTrimmed.contains("完本") || titleTrimmed.contains("下载") {
+            return false
+        }
+        if titleTrimmed.contains("阅读记录") || titleTrimmed.contains("设置") || titleTrimmed.contains("登录") || titleTrimmed.contains("注册") {
+            return false
+        }
+        if titleTrimmed.contains("玄幻") || titleTrimmed.contains("武侠") || titleTrimmed.contains("都市") || titleTrimmed.contains("历史") {
+            return false
+        }
+        if titleTrimmed.contains("科幻") || titleTrimmed.contains("网游") || titleTrimmed.contains("女生") || titleTrimmed.contains("男生") {
+            return false
+        }
+        return true
+    }
+
+    private func formatHTMLContent(_ html: String) -> String {
+        var result = html
+
+        result = result.replacingOccurrences(of: "<br>", with: "\n", options: .caseInsensitive)
+        result = result.replacingOccurrences(of: "<br/>", with: "\n", options: .caseInsensitive)
+        result = result.replacingOccurrences(of: "<br />", with: "\n", options: .caseInsensitive)
+        result = result.replacingOccurrences(of: "</br>", with: "\n", options: .caseInsensitive)
+        result = result.replacingOccurrences(of: "</p>", with: "\n", options: .caseInsensitive)
+        result = result.replacingOccurrences(of: "</div>", with: "\n", options: .caseInsensitive)
+        result = result.replacingOccurrences(of: "<p>", with: "", options: .caseInsensitive)
+        result = result.replacingOccurrences(of: "<p ", with: "", options: .caseInsensitive)
+        result = result.replacingOccurrences(of: "<div>", with: "", options: .caseInsensitive)
+        result = result.replacingOccurrences(of: "<div ", with: "", options: .caseInsensitive)
+
+        result = result.replacingOccurrences(of: "&nbsp;", with: " ")
+        result = result.replacingOccurrences(of: "&amp;", with: "&")
+        result = result.replacingOccurrences(of: "&lt;", with: "<")
+        result = result.replacingOccurrences(of: "&gt;", with: ">")
+        result = result.replacingOccurrences(of: "&quot;", with: "\"")
+        result = result.replacingOccurrences(of: "&#39;", with: "'")
+        result = result.replacingOccurrences(of: "&ldquo;", with: "\u{201C}")
+        result = result.replacingOccurrences(of: "&rdquo;", with: "\u{201D}")
+
+        while let openTag = result.range(of: "<[^>]+>", options: .regularExpression) {
+            result.removeSubrange(openTag)
+        }
+
+        let lines = result.components(separatedBy: "\n")
+        let trimmedLines = lines.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        result = trimmedLines.filter { $0.isEmpty == false }.joined(separator: "\n")
+
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func extractCSS(from element: Element, rule: String) throws -> String {

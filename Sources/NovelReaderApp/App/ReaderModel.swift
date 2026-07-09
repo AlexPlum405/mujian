@@ -278,6 +278,11 @@ final class ReaderModel: ObservableObject {
     }
 
     func deleteBook(id: UUID) {
+        if let book = books.first(where: { $0.id == id }) {
+            if case .local(let fileURL) = book.origin {
+                try? FileManager.default.removeItem(at: fileURL)
+            }
+        }
         bookRepository.deleteBook(id: id)
         chapterCountCache.removeValue(forKey: id)
         books = bookRepository.loadAllBooks()
