@@ -5,6 +5,10 @@ extension Color {
         light: NSColor(red: 0.984, green: 0.973, blue: 0.945, alpha: 1),
         dark: NSColor(red: 0.122, green: 0.126, blue: 0.114, alpha: 1)
     ))
+    static let readerPanel = Color(nsColor: NSColor.dynamicColor(
+        light: NSColor(red: 1.000, green: 0.980, blue: 0.945, alpha: 1),
+        dark: NSColor(red: 0.157, green: 0.169, blue: 0.145, alpha: 1)
+    ))
     static let sidebarBackground = Color(nsColor: NSColor.dynamicColor(
         light: NSColor(red: 0.949, green: 0.953, blue: 0.941, alpha: 1),
         dark: NSColor(red: 0.141, green: 0.145, blue: 0.125, alpha: 1)
@@ -96,8 +100,23 @@ struct PrimarySidebarButtonStyle: ButtonStyle {
             .foregroundStyle(Color.white)
             .frame(height: 34)
             .padding(.horizontal, 12)
-            .background(Color.readerAccent.opacity(configuration.isPressed ? 0.86 : 1))
+            .background(
+                LinearGradient(
+                    colors: [
+                        Color.readerAccent.opacity(configuration.isPressed ? 0.82 : 0.94),
+                        Color.readerAccent.opacity(configuration.isPressed ? 0.74 : 0.84)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(Color.white.opacity(0.16), lineWidth: 1)
+            }
+            .shadow(color: Color.readerAccent.opacity(configuration.isPressed ? 0.06 : 0.14), radius: 8, x: 0, y: 3)
+            .scaleEffect(configuration.isPressed ? 0.985 : 1)
     }
 }
 
@@ -105,13 +124,15 @@ struct SecondarySidebarButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(Color.secondary)
-            .background(Color.readerPaper.opacity(configuration.isPressed ? 0.6 : 1))
+            .foregroundStyle(Color.readerInk.opacity(configuration.isPressed ? 0.62 : 0.72))
+            .background(Color.readerPanel.opacity(configuration.isPressed ? 0.56 : 0.42))
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(Color.sidebarBorder, lineWidth: 1)
+                    .stroke(Color.sidebarBorder.opacity(configuration.isPressed ? 0.86 : 0.58), lineWidth: 1)
             }
+            .shadow(color: .black.opacity(configuration.isPressed ? 0.02 : 0.05), radius: 5, x: 0, y: 2)
+            .scaleEffect(configuration.isPressed ? 0.985 : 1)
     }
 }
 
@@ -123,12 +144,13 @@ struct PanelActionButtonStyle: ButtonStyle {
             .font(.system(size: 12, weight: .semibold))
             .foregroundStyle(Color.readerAccent)
             .frame(width: width, height: 30)
-            .background(Color.readerAccent.opacity(configuration.isPressed ? 0.18 : 0.10))
+            .background(Color.readerAccent.opacity(configuration.isPressed ? 0.15 : 0.08))
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(Color.readerAccent.opacity(configuration.isPressed ? 0.32 : 0.22), lineWidth: 1)
+                    .stroke(Color.readerAccent.opacity(configuration.isPressed ? 0.30 : 0.18), lineWidth: 1)
             }
+            .scaleEffect(configuration.isPressed ? 0.985 : 1)
     }
 }
 
@@ -187,9 +209,15 @@ struct MujianSegmentedControl<Option: Hashable>: View {
 struct PrimaryIconButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(Color.white)
-            .background(Color.readerAccent.opacity(configuration.isPressed ? 0.86 : 1))
+            .foregroundStyle(Color.readerAccent.opacity(configuration.isPressed ? 0.76 : 1))
+            .background(Color.readerAccent.opacity(configuration.isPressed ? 0.17 : 0.11))
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(Color.readerAccent.opacity(configuration.isPressed ? 0.30 : 0.22), lineWidth: 1)
+            }
+            .shadow(color: Color.readerAccent.opacity(configuration.isPressed ? 0.03 : 0.10), radius: 6, x: 0, y: 2)
+            .scaleEffect(configuration.isPressed ? 0.985 : 1)
     }
 }
 
@@ -197,13 +225,14 @@ struct FloatingIconButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 15, weight: .semibold))
-            .foregroundStyle(Color.secondary)
-            .background(Color.readerPaper.opacity(configuration.isPressed ? 0.72 : 0.92))
+            .foregroundStyle(Color.readerInk.opacity(configuration.isPressed ? 0.62 : 0.72))
+            .background(Color.readerPanel.opacity(configuration.isPressed ? 0.70 : 0.88))
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(Color.sidebarBorder, lineWidth: 1)
+                    .stroke(Color.sidebarBorder.opacity(0.72), lineWidth: 1)
             }
-            .shadow(color: .black.opacity(0.10), radius: 10, x: 0, y: 4)
+            .shadow(color: .black.opacity(configuration.isPressed ? 0.05 : 0.10), radius: 10, x: 0, y: 4)
+            .scaleEffect(configuration.isPressed ? 0.985 : 1)
     }
 }

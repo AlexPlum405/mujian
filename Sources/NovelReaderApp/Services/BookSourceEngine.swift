@@ -390,7 +390,8 @@ final class LegadoBookSourceEngine: BookSourceEngine, @unchecked Sendable {
         switch ruleType {
         case .css:
             let doc = try SwiftSoup.parse(html)
-            let cssRule = SourceRuleType.stripCSSPrefix(source.searchRule)
+            let rawCssRule = SourceRuleType.stripCSSPrefix(source.searchRule)
+            let cssRule = LegadoSelector.isLegadoSelector(rawCssRule) ? LegadoSelector.toCSS(rawCssRule) : rawCssRule
             for selector in searchResultSelectors(primary: cssRule) {
                 var selectorResults: [OnlineSearchResult] = []
                 let nodes = try doc.select(selector)
@@ -435,6 +436,20 @@ final class LegadoBookSourceEngine: BookSourceEngine, @unchecked Sendable {
                     sourceName: source.name
                 ))
             }
+        case .js:
+            let (cssPart, jsPart) = SourceRuleType.splitJS(source.searchRule)
+            let cssSelector = LegadoSelector.isLegadoSelector(cssPart) ? LegadoSelector.toCSS(cssPart) : SourceRuleType.stripCSSPrefix(cssPart)
+            let doc = try SwiftSoup.parse(html)
+            if cssSelector.isEmpty == false {
+                results = collectSearchResults(from: doc, source: source, base: base, primarySelector: cssSelector)
+            }
+            if results.isEmpty {
+                let jsResult = LegadoJSBridge().execute(jsCode: jsPart, result: html, baseUrl: base, book: nil, source: nil)
+                if jsResult.isEmpty == false {
+                    let jsDoc = try SwiftSoup.parse(jsResult)
+                    results = collectSearchResults(from: jsDoc, source: source, base: base, primarySelector: "")
+                }
+            }
         default:
             return []
         }
@@ -461,6 +476,33 @@ final class LegadoBookSourceEngine: BookSourceEngine, @unchecked Sendable {
             seen.insert(trimmed)
             return trimmed
         }
+    }
+
+    private func collectSearchResults(from doc: Document, source: BookSource, base: String, primarySelector: String) -> [OnlineSearchResult] {
+        for selector in searchResultSelectors(primary: primarySelector) {
+            var batch: [OnlineSearchResult] = []
+            guard let nodes = try? doc.select(selector) else { continue }
+            for node in nodes {
+                let title = (try? extractCSS(from: node, rule: source.titleRule)) ?? ""
+                if title.isEmpty { continue }
+                let author = try? extractCSS(from: node, rule: source.authorRule)
+                let bookUrlRule = source.bookUrlRule.isEmpty ? source.chapterUrlRule : source.bookUrlRule
+                let bookUrl = (try? extractCSS(from: node, rule: bookUrlRule)) ?? ""
+                let intro = try? extractCSS(from: node, rule: source.introRule)
+                batch.append(OnlineSearchResult(
+                    title: title,
+                    author: author,
+                    bookUrl: resolvedURL(path: bookUrl, base: base).absoluteString,
+                    intro: intro?.isEmpty == false ? intro : nil,
+                    sourceId: source.id,
+                    sourceName: source.name
+                ))
+            }
+            if batch.isEmpty == false {
+                return batch
+            }
+        }
+        return []
     }
 
     private func chapterListPageURLs(html: String, currentURL: URL) throws -> [URL] {
@@ -597,7 +639,8 @@ final class LegadoBookSourceEngine: BookSourceEngine, @unchecked Sendable {
         switch ruleType {
         case .css:
             let doc = try SwiftSoup.parse(html)
-            let cssRule = SourceRuleType.stripCSSPrefix(source.chapterListRule)
+            let rawCssRule = SourceRuleType.stripCSSPrefix(source.chapterListRule)
+            let cssRule = LegadoSelector.isLegadoSelector(rawCssRule) ? LegadoSelector.toCSS(rawCssRule) : rawCssRule
             let nodes = try doc.select(cssRule)
             for node in nodes {
                 let title = (try? extractCSS(from: node, rule: source.chapterTitleRule)) ?? ""
@@ -623,6 +666,42 @@ final class LegadoBookSourceEngine: BookSourceEngine, @unchecked Sendable {
                     title: title.isEmpty ? "未命名章节" : title,
                     url: absoluteUrl
                 ))
+            }
+        case .js:
+            let (cssPart, jsPart) = SourceRuleType.splitJS(source.chapterListRule)
+            let cssSelector = LegadoSelector.isLegadoSelector(cssPart) ? LegadoSelector.toCSS(cssPart) : SourceRuleType.stripCSSPrefix(cssPart)
+            let doc = try SwiftSoup.parse(html)
+            if cssSelector.isEmpty == false {
+                let nodes = try doc.select(cssSelector)
+                for node in nodes {
+                    let title = (try? extractCSS(from: node, rule: source.chapterTitleRule)) ?? ""
+                    let url = (try? extractCSS(from: node, rule: source.chapterUrlRule)) ?? ""
+                    guard url.isEmpty == false else { continue }
+                    let absoluteUrl = resolvedURL(path: url, base: base).absoluteString
+                    guard isLikelyChapterUrl(absoluteUrl, title: title) else { continue }
+                    chapters.append(OnlineChapter(
+                        title: title.isEmpty ? "未命名章节" : title,
+                        url: absoluteUrl
+                    ))
+                }
+            }
+            if chapters.isEmpty {
+                let jsResult = LegadoJSBridge().execute(jsCode: jsPart, result: html, baseUrl: base, book: nil, source: nil)
+                if jsResult.isEmpty == false {
+                    let jsDoc = try SwiftSoup.parse(jsResult)
+                    let nodes = try jsDoc.select("a[href]")
+                    for node in nodes {
+                        let title = (try? node.text()) ?? ""
+                        let url = (try? node.attr("href")) ?? ""
+                        guard url.isEmpty == false else { continue }
+                        let absoluteUrl = resolvedURL(path: url, base: base).absoluteString
+                        guard isLikelyChapterUrl(absoluteUrl, title: title) else { continue }
+                        chapters.append(OnlineChapter(
+                            title: title.isEmpty ? "未命名章节" : title,
+                            url: absoluteUrl
+                        ))
+                    }
+                }
             }
         default:
             return []
@@ -702,7 +781,8 @@ final class LegadoBookSourceEngine: BookSourceEngine, @unchecked Sendable {
                 attr = "text"
             }
 
-            let nodes = try doc.select(selector)
+            let resolvedSelector = LegadoSelector.isLegadoSelector(selector) ? LegadoSelector.toCSS(selector) : selector
+            let nodes = try doc.select(resolvedSelector)
 
             if attr == "html" || attr == "innerHTML" {
                 let htmlContent = try nodes.html()
@@ -720,6 +800,16 @@ final class LegadoBookSourceEngine: BookSourceEngine, @unchecked Sendable {
             let xpath = SourceRuleType.stripXPathPrefix(source.contentRule)
             let nodes = XPathEvaluator.evaluate(html: html, xpath: xpath)
             return nodes.map(\.text).joined(separator: "\n")
+        case .js:
+            let (cssPart, jsPart) = SourceRuleType.splitJS(source.contentRule)
+            if cssPart.isEmpty {
+                return LegadoJSBridge().execute(jsCode: jsPart, result: html, baseUrl: source.url, book: nil, source: nil)
+            }
+            let cssSelector = LegadoSelector.isLegadoSelector(cssPart) ? LegadoSelector.toCSS(cssPart) : SourceRuleType.stripCSSPrefix(cssPart)
+            let doc = try SwiftSoup.parse(html)
+            let nodes = try doc.select(cssSelector)
+            let initial = try nodes.html()
+            return LegadoJSBridge().execute(jsCode: jsPart, result: initial, baseUrl: source.url, book: nil, source: nil)
         default:
             return ""
         }
@@ -756,7 +846,13 @@ final class LegadoBookSourceEngine: BookSourceEngine, @unchecked Sendable {
     }
 
     private func extractCSS(from element: Element, rule: String) throws -> String {
+        if LegadoSelector.isLegadoSelector(rule) {
+            return LegadoSelector.selectTextFromElement(element, selector: rule)
+        }
         var trimmed = SourceRuleType.stripCSSPrefix(rule)
+        if LegadoSelector.isLegadoSelector(trimmed) {
+            return LegadoSelector.selectTextFromElement(element, selector: trimmed)
+        }
         if trimmed.hasPrefix("*") {
             trimmed = String(trimmed.dropFirst())
         }
@@ -848,6 +944,7 @@ enum SourceRuleType {
     case css
     case xpath
     case jsonpath
+    case js
     case unknown
 
     static func detect(_ rule: String?) -> SourceRuleType? {
@@ -864,6 +961,9 @@ enum SourceRuleType {
         if lower.hasPrefix("json:") || lower.hasPrefix("@json:") || lower.hasPrefix("$.") {
             return .jsonpath
         }
+        if lower.contains("<js>") || lower.contains("@js:") || lower.hasPrefix("js:") {
+            return .js
+        }
 
         if trimmed.hasPrefix("//") || trimmed.hasPrefix(".//") || trimmed.hasPrefix("(") {
             return .xpath
@@ -877,6 +977,10 @@ enum SourceRuleType {
             if trimmed.hasPrefix(".") || trimmed.hasPrefix("$") {
                 return .jsonpath
             }
+        }
+
+        if trimmed.hasPrefix("class.") || trimmed.hasPrefix("id.") || trimmed.hasPrefix("tag.") {
+            return .css
         }
 
         return .css
@@ -910,5 +1014,29 @@ enum SourceRuleType {
             result = String(result.dropFirst("json:".count))
         }
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    static func splitJS(_ rule: String) -> (css: String, js: String) {
+        let trimmed = rule.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if let openRange = trimmed.range(of: "<js>", options: .caseInsensitive) {
+            let css = String(trimmed[..<openRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+            let afterOpen = String(trimmed[openRange.upperBound...])
+            if let closeRange = afterOpen.range(of: "</js>", options: .caseInsensitive) {
+                return (css, String(afterOpen[..<closeRange.lowerBound]))
+            }
+            return (css, afterOpen)
+        }
+
+        if let jsRange = trimmed.range(of: "@js:", options: .caseInsensitive) {
+            let css = String(trimmed[..<jsRange.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+            return (css, String(trimmed[jsRange.upperBound...]))
+        }
+
+        if trimmed.lowercased().hasPrefix("js:") {
+            return ("", String(trimmed.dropFirst(3)))
+        }
+
+        return ("", trimmed)
     }
 }

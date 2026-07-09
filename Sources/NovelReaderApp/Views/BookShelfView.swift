@@ -4,6 +4,7 @@ struct BookShelfView: View {
     @EnvironmentObject private var model: ReaderModel
     @State private var isSearchPresented = false
     @State private var isSourcesPresented = false
+    @State private var isSettingsPresented = false
     @State private var pendingDeleteBook: Book?
 
     private var theme: ReadingTheme { model.readingSettings.theme }
@@ -12,6 +13,7 @@ struct BookShelfView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 BookShelfHeader(
+                    isSettingsPresented: $isSettingsPresented,
                     isSearchPresented: $isSearchPresented,
                     isSourcesPresented: $isSourcesPresented
                 )
@@ -59,6 +61,16 @@ struct BookShelfView: View {
                     isSourcesPresented = false
                 }
             }
+            if isSettingsPresented {
+                BookShelfOverlay {
+                    BookShelfSettingsPanel {
+                        isSettingsPresented = false
+                    }
+                    .frame(width: 320)
+                } onTapOutside: {
+                    isSettingsPresented = false
+                }
+            }
             if let pendingDeleteBook {
                 BookShelfOverlay {
                     BookDeleteConfirmPanel(book: pendingDeleteBook) {
@@ -75,7 +87,7 @@ struct BookShelfView: View {
 
 private struct BookShelfHeader: View {
     @EnvironmentObject private var model: ReaderModel
-    @State private var isSettingsPresented = false
+    @Binding var isSettingsPresented: Bool
     @Binding var isSearchPresented: Bool
     @Binding var isSourcesPresented: Bool
 
@@ -86,21 +98,13 @@ private struct BookShelfHeader: View {
 
                 Spacer()
 
-                searchButton
-                sourcesButton
-                settingsButton
-                addButton
+                toolbarButtons
             }
 
             VStack(alignment: .leading, spacing: 14) {
                 titleBlock
 
-                HStack(spacing: 10) {
-                    searchButton
-                    sourcesButton
-                    settingsButton
-                    addButton
-                }
+                toolbarButtons
             }
         }
     }
@@ -129,8 +133,26 @@ private struct BookShelfHeader: View {
         }
     }
 
+    private var toolbarButtons: some View {
+        HStack(spacing: 8) {
+            searchButton
+            sourcesButton
+            settingsButton
+            addButton
+        }
+        .padding(4)
+        .background(Color.readerPanel(for: model.readingSettings.theme).opacity(0.40))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color.sidebarBorder(for: model.readingSettings.theme).opacity(0.54), lineWidth: 1)
+        }
+    }
+
     private var searchButton: some View {
         Button {
+            isSettingsPresented = false
+            isSourcesPresented = false
             isSearchPresented = true
         } label: {
             Image(systemName: "magnifyingglass")
@@ -143,6 +165,8 @@ private struct BookShelfHeader: View {
 
     private var sourcesButton: some View {
         Button {
+            isSettingsPresented = false
+            isSearchPresented = false
             isSourcesPresented = true
         } label: {
             Image(systemName: "network")
@@ -155,6 +179,8 @@ private struct BookShelfHeader: View {
 
     private var settingsButton: some View {
         Button {
+            isSearchPresented = false
+            isSourcesPresented = false
             isSettingsPresented.toggle()
         } label: {
             Image(systemName: "gearshape")
@@ -163,12 +189,6 @@ private struct BookShelfHeader: View {
         }
         .buttonStyle(SecondarySidebarButtonStyle())
         .help("书架设置")
-        .popover(isPresented: $isSettingsPresented, arrowEdge: .top) {
-            BookShelfSettingsPanel {
-                isSettingsPresented = false
-            }
-            .frame(width: 306)
-        }
     }
 
     private var addButton: some View {
@@ -207,7 +227,7 @@ private struct BookShelfSettingsPanel: View {
     let dismiss: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("书架设置")
@@ -217,14 +237,7 @@ private struct BookShelfSettingsPanel: View {
 
                 Spacer()
 
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "xmark")
-                        .frame(width: 28, height: 28)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
+                BookShelfPanelIconButton(systemName: "xmark", action: dismiss)
             }
 
             VStack(alignment: .leading, spacing: 8) {
@@ -246,13 +259,14 @@ private struct BookShelfSettingsPanel: View {
                 }
             }
         }
-        .padding(16)
+        .padding(18)
         .background(Color.readerPanel(for: model.readingSettings.theme))
     }
 }
 
 private struct BookShelfStyleOption: View {
     @EnvironmentObject private var model: ReaderModel
+    @State private var isHovered = false
 
     let style: BookshelfStyle
     let isSelected: Bool
@@ -263,9 +277,9 @@ private struct BookShelfStyleOption: View {
             HStack(spacing: 10) {
                 Image(systemName: iconName)
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(isSelected ? Color.readerAccent : Color.secondary)
+                    .foregroundStyle(isSelected ? Color.readerAccent : Color.readerInk(for: model.readingSettings.theme).opacity(0.56))
                     .frame(width: 24, height: 24)
-                    .background(isSelected ? Color.readerAccent.opacity(0.12) : Color.primary.opacity(0.05))
+                    .background(isSelected ? Color.readerAccent.opacity(0.11) : Color.primary.opacity(isHovered ? 0.06 : 0.035))
                     .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -276,22 +290,30 @@ private struct BookShelfStyleOption: View {
 
                 Spacer()
 
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Color.readerAccent)
-                }
+                Circle()
+                    .fill(isSelected ? Color.readerAccent : Color.clear)
+                    .frame(width: 6, height: 6)
             }
             .padding(.horizontal, 10)
             .frame(height: 38)
-            .background(isSelected ? Color.readerAccent.opacity(0.10) : Color.readerPaper(for: model.readingSettings.theme).opacity(0.42))
+            .background(optionBackground)
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(isSelected ? Color.readerAccent.opacity(0.28) : Color.sidebarBorder(for: model.readingSettings.theme), lineWidth: 1)
+                    .stroke(isSelected ? Color.readerAccent.opacity(0.24) : Color.sidebarBorder(for: model.readingSettings.theme).opacity(isHovered ? 0.80 : 0.55), lineWidth: 1)
             }
         }
         .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .animation(.easeInOut(duration: 0.12), value: isHovered)
+    }
+
+    private var optionBackground: Color {
+        if isSelected {
+            return Color.readerAccent.opacity(0.09)
+        }
+
+        return Color.readerPaper(for: model.readingSettings.theme).opacity(isHovered ? 0.58 : 0.36)
     }
 
     private var iconName: String {
@@ -340,10 +362,10 @@ private struct DeskContinueCard: View {
         Button {
             Task { await model.openBook(book) }
         } label: {
-            HStack(spacing: 16) {
-                BookCoverMark(title: book.title, color: bookshelfColor(0), size: .large)
+            HStack(spacing: 18) {
+                BookCoverArtwork(book: book, index: 0, size: .large, progress: progressValue)
 
-                VStack(alignment: .leading, spacing: 7) {
+                VStack(alignment: .leading, spacing: 8) {
                     Text("继续阅读「\(book.title)」")
                         .font(.system(size: 19, weight: .semibold))
                         .foregroundStyle(Color.readerInk(for: model.readingSettings.theme))
@@ -364,16 +386,30 @@ private struct DeskContinueCard: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.readerAccent)
                     .frame(width: 28, height: 28)
-                    .background(Color.readerAccent.opacity(0.10))
+                    .background(Color.readerAccent.opacity(0.12))
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.readerPanel(for: model.readingSettings.theme).opacity(0.72))
+            .background(
+                LinearGradient(
+                    colors: [
+                        Color.readerPanel(for: model.readingSettings.theme).opacity(0.82),
+                        Color.readerPaper(for: model.readingSettings.theme).opacity(0.34)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .stroke(Color.readerAccent.opacity(0.20), lineWidth: 1)
+            }
+            .overlay(alignment: .leading) {
+                Rectangle()
+                    .fill(Color.readerAccent.opacity(0.72))
+                    .frame(width: 3)
             }
         }
         .buttonStyle(.plain)
@@ -381,8 +417,7 @@ private struct DeskContinueCard: View {
     }
 
     private var chapterText: String {
-        guard let url = book.localURL else { return "从头开始" }
-        let chapter = model.savedChapterIndex(for: url) + 1
+        let chapter = savedChapterNumber(for: book, model: model)
         return chapter > 1 ? "第 \(chapter) 章" : "从头开始"
     }
 
@@ -404,16 +439,8 @@ private struct DeskBookCard: View {
             Button {
                 Task { await model.openBook(book) }
             } label: {
-                VStack(alignment: .leading, spacing: 12) {
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .fill(bookshelfColor(index))
-                        .frame(height: 42)
-                        .overlay(alignment: .bottomLeading) {
-                            Text("TXT")
-                                .font(.system(size: 11, weight: .bold))
-                                .foregroundStyle(.white.opacity(0.92))
-                                .padding(9)
-                        }
+                VStack(alignment: .leading, spacing: 11) {
+                    BookCoverArtwork(book: book, index: index, size: .grid, progress: progressValue)
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(book.title)
@@ -431,25 +458,26 @@ private struct DeskBookCard: View {
 
                     HStack {
                         Text(chapterText)
+                            .lineLimit(1)
                         Spacer()
                         Text(book.locationLabel)
                             .lineLimit(1)
                     }
                     .font(.caption)
                     .foregroundStyle(.secondary)
-
-                    if progressValue > 0 {
-                        ProgressStrip(progress: progressValue, color: Color.readerAccent, height: 3)
-                    }
                 }
-                .padding(12)
-                .frame(maxWidth: .infinity, minHeight: 164, alignment: .leading)
-                .background(Color.readerPanel(for: model.readingSettings.theme).opacity(0.42))
+                .padding(11)
+                .frame(maxWidth: .infinity, minHeight: 188, alignment: .leading)
+                .background(Color.readerPanel(for: model.readingSettings.theme).opacity(isHovered ? 0.56 : 0.42))
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(Color.sidebarBorder(for: model.readingSettings.theme), lineWidth: 1)
+                        .stroke(
+                            isHovered ? Color.readerAccent.opacity(0.22) : Color.sidebarBorder(for: model.readingSettings.theme).opacity(0.76),
+                            lineWidth: 1
+                        )
                 }
+                .shadow(color: .black.opacity(isHovered ? 0.07 : 0.03), radius: isHovered ? 9 : 4, x: 0, y: isHovered ? 4 : 2)
             }
             .buttonStyle(.plain)
             .help(book.helpPath)
@@ -467,13 +495,225 @@ private struct DeskBookCard: View {
     }
 
     private var chapterText: String {
-        guard let url = book.localURL else { return "未开始" }
-        let chapter = model.savedChapterIndex(for: url) + 1
+        let chapter = savedChapterNumber(for: book, model: model)
         return chapter > 1 ? "第 \(chapter) 章" : "未开始"
     }
 
     private var progressValue: Double {
         model.readingProgress(for: book)
+    }
+}
+
+private enum BookCoverArtworkSize: Equatable {
+    case grid
+    case large
+    case feature
+    case detail
+
+    var dimensions: CGSize? {
+        switch self {
+        case .grid:
+            nil
+        case .large:
+            CGSize(width: 72, height: 96)
+        case .feature:
+            CGSize(width: 218, height: 260)
+        case .detail:
+            CGSize(width: 224, height: 170)
+        }
+    }
+
+    var height: CGFloat {
+        dimensions?.height ?? 88
+    }
+
+    var cornerRadius: CGFloat {
+        switch self {
+        case .grid:
+            7
+        case .large, .feature, .detail:
+            8
+        }
+    }
+
+    var titleSize: CGFloat {
+        switch self {
+        case .grid:
+            23
+        case .large:
+            18
+        case .feature:
+            34
+        case .detail:
+            28
+        }
+    }
+
+    var titleLimit: Int {
+        switch self {
+        case .grid, .large:
+            4
+        case .feature, .detail:
+            6
+        }
+    }
+
+    var textPadding: CGFloat {
+        switch self {
+        case .grid:
+            14
+        case .large:
+            10
+        case .feature, .detail:
+            22
+        }
+    }
+
+    var spineWidth: CGFloat {
+        switch self {
+        case .grid:
+            9
+        case .large:
+            10
+        case .feature, .detail:
+            12
+        }
+    }
+}
+
+private struct BookCoverArtwork: View {
+    @EnvironmentObject private var model: ReaderModel
+    @State private var image: NSImage?
+
+    let book: Book
+    let index: Int
+    let size: BookCoverArtworkSize
+    let progress: Double
+
+    var body: some View {
+        ZStack {
+            if let image {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: size.dimensions?.width, height: size.height)
+                    .clipped()
+                    .overlay {
+                        LinearGradient(
+                            colors: [
+                                .black.opacity(0.10),
+                                .clear,
+                                .black.opacity(0.18)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    }
+            } else {
+                GeneratedBookCover(
+                    title: book.title,
+                    author: book.author,
+                    kind: book.contentKindLabel,
+                    color: bookshelfColor(for: book, fallbackIndex: index),
+                    size: size
+                )
+            }
+        }
+        .frame(width: size.dimensions?.width, height: size.height)
+        .frame(maxWidth: size.dimensions == nil ? .infinity : nil)
+        .clipShape(RoundedRectangle(cornerRadius: size.cornerRadius, style: .continuous))
+        .overlay(alignment: .leading) {
+            Rectangle()
+                .fill(.black.opacity(image == nil ? 0.18 : 0.24))
+                .frame(width: size.spineWidth)
+        }
+        .overlay(alignment: .bottomLeading) {
+            Text(book.contentKindLabel)
+                .font(.system(size: 10, weight: .bold))
+                .foregroundStyle(.white.opacity(0.92))
+                .padding(.horizontal, 8)
+                .frame(height: 21)
+                .background(.black.opacity(0.20))
+                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .padding(8)
+        }
+        .overlay(alignment: .bottomLeading) {
+            if progress > 0 {
+                GeometryReader { proxy in
+                    Rectangle()
+                        .fill(.white.opacity(image == nil ? 0.42 : 0.64))
+                        .frame(width: max(proxy.size.width * progress, 12), height: 3)
+                }
+                .frame(height: 3)
+            }
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: size.cornerRadius, style: .continuous)
+                .stroke(.white.opacity(0.18), lineWidth: 1)
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: size.cornerRadius, style: .continuous)
+                .stroke(Color.sidebarBorder(for: model.readingSettings.theme).opacity(0.34), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(size == .grid ? 0.06 : 0.14), radius: size == .grid ? 5 : 18, x: 0, y: size == .grid ? 2 : 10)
+        .task(id: book.coverTaskID) {
+            image = await localCoverImage(for: book)
+        }
+    }
+
+    private func localCoverImage(for book: Book) async -> NSImage? {
+        guard let coverURL = BookCoverResolver.localCoverURL(for: book) else {
+            return nil
+        }
+
+        return await Task.detached(priority: .utility) {
+            NSImage(contentsOf: coverURL)
+        }.value
+    }
+}
+
+private struct GeneratedBookCover: View {
+    @EnvironmentObject private var model: ReaderModel
+
+    let title: String
+    let author: String?
+    let kind: String
+    let color: Color
+    let size: BookCoverArtworkSize
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: size.cornerRadius, style: .continuous)
+            .fill(
+                LinearGradient(
+                    colors: [
+                        color.opacity(0.94),
+                        color.opacity(0.76),
+                        Color.readerInk(for: model.readingSettings.theme).opacity(0.16)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .overlay(alignment: .topTrailing) {
+                Text(shortCoverTitle(from: title, maxCharacters: size.titleLimit))
+                    .font(.custom("Songti SC", size: size.titleSize, relativeTo: .title3))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.white.opacity(0.92))
+                    .lineLimit(size == .grid ? 2 : 3)
+                    .multilineTextAlignment(.center)
+                    .padding(.top, size.textPadding)
+                    .padding(.trailing, size.textPadding)
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if let author, author.isEmpty == false, size != .grid {
+                    Text(author)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.68))
+                        .lineLimit(1)
+                        .padding(.trailing, size.textPadding)
+                        .padding(.bottom, size.textPadding)
+                }
+            }
     }
 }
 
@@ -504,7 +744,16 @@ private struct SpineBookShelfLayout: View {
             }
         }
         .padding(18)
-        .background(Color.readerPanel(for: model.readingSettings.theme).opacity(0.38))
+        .background(
+            LinearGradient(
+                colors: [
+                    Color.readerPanel(for: model.readingSettings.theme).opacity(0.58),
+                    Color.readerPaper(for: model.readingSettings.theme).opacity(0.20)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -526,7 +775,7 @@ private struct SpineFeatureCard: View {
                 Task { await model.openBook(book) }
             } label: {
                 VStack(alignment: .leading, spacing: 13) {
-                    BookCoverMark(title: book.title, color: bookshelfColor(0), size: .feature)
+                    BookCoverArtwork(book: book, index: 0, size: .feature, progress: progressValue)
                         .frame(maxWidth: .infinity)
 
                     VStack(alignment: .leading, spacing: 4) {
@@ -539,28 +788,33 @@ private struct SpineFeatureCard: View {
                         BookAuthorLabel(author: book.author)
                     }
 
-                    Text(chapterText)
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
-                        .lineSpacing(2)
+                    HStack(spacing: 8) {
+                        Text(book.contentKindLabel)
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(Color.readerAccent)
+                            .padding(.horizontal, 8)
+                            .frame(height: 22)
+                            .background(Color.readerAccent.opacity(0.10))
+                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+
+                        Text(chapterText)
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
 
                     ProgressStrip(progress: progressValue, color: bookshelfColor(2))
 
-                    Text("继续阅读")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 34)
-                        .background(Color.readerAccent)
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    ContinuePill()
                 }
                 .padding(14)
-                .background(Color.readerPaper(for: model.readingSettings.theme).opacity(0.50))
+                .background(Color.readerPaper(for: model.readingSettings.theme).opacity(isHovered ? 0.62 : 0.50))
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 .overlay {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(Color.sidebarBorder(for: model.readingSettings.theme), lineWidth: 1)
+                        .stroke(isHovered ? Color.readerAccent.opacity(0.22) : Color.sidebarBorder(for: model.readingSettings.theme), lineWidth: 1)
                 }
+                .shadow(color: .black.opacity(isHovered ? 0.08 : 0.03), radius: isHovered ? 10 : 4, x: 0, y: isHovered ? 5 : 2)
             }
             .buttonStyle(.plain)
             .help(book.helpPath)
@@ -578,8 +832,7 @@ private struct SpineFeatureCard: View {
     }
 
     private var chapterText: String {
-        guard let url = book.localURL else { return "从头开始" }
-        let chapter = model.savedChapterIndex(for: url) + 1
+        let chapter = savedChapterNumber(for: book, model: model)
         return chapter > 1 ? "第 \(chapter) 章" : "从头开始"
     }
 
@@ -621,25 +874,14 @@ private struct SpineShelfRow: View {
             }
             .padding(.horizontal, 10)
 
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [
-                            Color(nsColor: NSColor(red: 0.75, green: 0.58, blue: 0.36, alpha: 1)),
-                            Color(nsColor: NSColor(red: 0.48, green: 0.33, blue: 0.19, alpha: 1))
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .frame(height: 10)
-                .shadow(color: .black.opacity(0.12), radius: 5, x: 0, y: 3)
+            ShelfPlank()
         }
     }
 }
 
 private struct SpineButton: View {
     @EnvironmentObject private var model: ReaderModel
+    @State private var isHovered = false
 
     let book: Book
     let index: Int
@@ -660,23 +902,109 @@ private struct SpineButton: View {
         Button {
             Task { await model.openBook(book) }
         } label: {
-            RoundedRectangle(cornerRadius: 5, style: .continuous)
-                .fill(bookshelfColor(index))
-                .frame(width: width, height: height)
-                .overlay {
-                    VerticalSpineTitle(
-                        title: book.title,
-                        maxCharacters: titleCharacterLimit
+            ZStack {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                bookshelfColor(for: book, fallbackIndex: index).opacity(0.96),
+                                bookshelfColor(for: book, fallbackIndex: index).opacity(0.72)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
                     )
-                    .frame(width: width - 8, height: height - 14)
+
+                HStack(spacing: 0) {
+                    Rectangle()
+                        .fill(.black.opacity(0.16))
+                        .frame(width: 4)
+                    Spacer(minLength: 0)
+                    Rectangle()
+                        .fill(.white.opacity(0.10))
+                        .frame(width: 2)
                 }
-                .overlay {
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .stroke(.white.opacity(0.16), lineWidth: 1)
+
+                VStack(spacing: 0) {
+                    Rectangle()
+                        .fill(.white.opacity(0.18))
+                        .frame(height: 1)
+                    Spacer(minLength: 0)
+                    Rectangle()
+                        .fill(.black.opacity(0.12))
+                        .frame(height: 9)
                 }
+
+                VerticalSpineTitle(
+                    title: book.title,
+                    maxCharacters: titleCharacterLimit
+                )
+                .frame(width: width - 8, height: height - 18)
+
+                if book.isOnline {
+                    VStack {
+                        Circle()
+                            .fill(.white.opacity(0.56))
+                            .frame(width: 5, height: 5)
+                            .padding(.top, 8)
+                        Spacer(minLength: 0)
+                    }
+                }
+
+                if progressValue > 0 {
+                    VStack {
+                        Spacer(minLength: 0)
+                        HStack(spacing: 0) {
+                            Rectangle()
+                                .fill(.white.opacity(0.42))
+                                .frame(width: max(width * progressValue, 6), height: 3)
+                            Spacer(minLength: 0)
+                        }
+                    }
+                }
+            }
+            .frame(width: width, height: height)
+            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    .stroke(isHovered ? .white.opacity(0.26) : .white.opacity(0.14), lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(isHovered ? 0.15 : 0.08), radius: isHovered ? 6 : 3, x: 0, y: isHovered ? 3 : 2)
+            .scaleEffect(isHovered ? 1.014 : 1, anchor: .bottom)
         }
         .buttonStyle(.plain)
         .help("\(book.title)\n\(book.helpPath)")
+        .onHover { isHovered = $0 }
+        .animation(.easeInOut(duration: 0.12), value: isHovered)
+    }
+
+    private var progressValue: Double {
+        model.readingProgress(for: book)
+    }
+}
+
+private struct ShelfPlank: View {
+    var body: some View {
+        ZStack(alignment: .top) {
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(nsColor: NSColor(red: 0.72, green: 0.55, blue: 0.35, alpha: 1)),
+                            Color(nsColor: NSColor(red: 0.45, green: 0.30, blue: 0.18, alpha: 1))
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+
+            Rectangle()
+                .fill(.white.opacity(0.18))
+                .frame(height: 1)
+                .padding(.horizontal, 5)
+        }
+        .frame(height: 11)
+        .shadow(color: .black.opacity(0.14), radius: 6, x: 0, y: 3)
     }
 }
 
@@ -767,9 +1095,9 @@ private struct DrawerSidebar: View {
                 }
             }
 
-            DrawerSourceRow(title: "全部书籍", count: books.count, isActive: true)
-            DrawerSourceRow(title: "正在读", count: min(books.count, 6), isActive: false)
-            DrawerSourceRow(title: "最近添加", count: min(books.count, 4), isActive: false)
+            DrawerSourceRow(title: "全部书籍", systemImage: "books.vertical", count: books.count, isActive: true)
+            DrawerSourceRow(title: "正在读", systemImage: "bookmark", count: min(books.count, 6), isActive: false)
+            DrawerSourceRow(title: "最近添加", systemImage: "clock", count: min(books.count, 4), isActive: false)
 
             Spacer(minLength: 24)
 
@@ -790,14 +1118,15 @@ private struct DrawerSidebar: View {
 
 private struct DrawerSourceRow: View {
     let title: String
+    let systemImage: String
     let count: Int
     let isActive: Bool
 
     var body: some View {
         HStack(spacing: 8) {
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .stroke(.secondary.opacity(0.55), lineWidth: 1)
-                .frame(width: 14, height: 14)
+            Image(systemName: systemImage)
+                .font(.system(size: 12, weight: .semibold))
+                .frame(width: 18, height: 18)
 
             Text(title)
                 .font(.system(size: 13, weight: .semibold))
@@ -810,9 +1139,13 @@ private struct DrawerSourceRow: View {
         }
         .foregroundStyle(isActive ? Color.primary : Color.secondary)
         .padding(.horizontal, 8)
-        .frame(height: 32)
-        .background(isActive ? Color.readerAccent.opacity(0.12) : Color.clear)
+        .frame(height: 34)
+        .background(isActive ? Color.readerAccent.opacity(0.13) : Color.primary.opacity(0.03))
         .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .stroke(isActive ? Color.readerAccent.opacity(0.18) : Color.clear, lineWidth: 1)
+        }
     }
 }
 
@@ -830,6 +1163,10 @@ private struct DrawerBookList: View {
                     .fontWeight(.semibold)
 
                 Spacer()
+
+                Text("\(books.count) 本")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 20)
             .frame(height: 58)
@@ -853,8 +1190,10 @@ private struct DrawerHeaderRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             Text("章节")
                 .frame(width: 64, alignment: .leading)
-            Text("位置")
+            Text("大小")
                 .frame(width: 92, alignment: .leading)
+            Text("")
+                .frame(width: 38)
         }
         .font(.caption)
         .fontWeight(.semibold)
@@ -878,12 +1217,12 @@ private struct DrawerBookRow: View {
     let requestDelete: (Book) -> Void
 
     var body: some View {
-        ZStack(alignment: .trailing) {
+        HStack(spacing: 0) {
             Button {
                 Task { await model.openBook(book) }
             } label: {
                 HStack(spacing: 12) {
-                    FileBadge()
+                    FileBadge(isOnline: book.isOnline)
 
                     VStack(alignment: .leading, spacing: 3) {
                         Text(book.title)
@@ -915,49 +1254,64 @@ private struct DrawerBookRow: View {
                         .foregroundStyle(.secondary)
                         .frame(width: 64, alignment: .leading)
 
-                    Text(fileSizeText)
+                    Text(sizeText)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .frame(width: 92, alignment: .leading)
                 }
-                .padding(.horizontal, 20)
+                .padding(.leading, 20)
+                .padding(.trailing, 12)
                 .frame(height: 58)
-                .background(index == 0 ? Color.readerAccent.opacity(0.09) : Color.clear)
-                .overlay(alignment: .leading) {
-                    if index == 0 {
-                        Rectangle()
-                            .fill(Color.readerAccent)
-                            .frame(width: 3)
-                    }
-                }
-                .overlay(alignment: .bottom) {
-                    Rectangle()
-                        .fill(Color.sidebarBorder.opacity(0.58))
-                        .frame(height: 1)
-                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.plain)
             .help(book.helpPath)
 
-            if isHovered {
-                BookCardDeleteButton {
-                    requestDelete(book)
-                }
-                    .padding(.trailing, 10)
+            Group {
+                if isHovered {
+                    BookCardDeleteButton {
+                        requestDelete(book)
+                    }
                     .transition(.opacity)
+                } else {
+                    Color.clear
+                        .frame(width: 24, height: 24)
+                }
             }
+            .frame(width: 38, height: 58)
+            .padding(.trailing, 20)
+        }
+        .background(rowBackground)
+        .overlay(alignment: .leading) {
+            if index == 0 {
+                Rectangle()
+                    .fill(Color.readerAccent)
+                    .frame(width: 3)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color.sidebarBorder.opacity(0.58))
+                .frame(height: 1)
         }
         .onHover { isHovered = $0 }
         .animation(.easeInOut(duration: 0.12), value: isHovered)
     }
 
+    private var rowBackground: Color {
+        if isHovered {
+            return Color.readerAccent.opacity(index == 0 ? 0.12 : 0.06)
+        }
+
+        return index == 0 ? Color.readerAccent.opacity(0.09) : Color.clear
+    }
+
     private var chapterText: String {
-        guard let url = book.localURL else { return "-" }
-        let chapter = model.savedChapterIndex(for: url) + 1
+        let chapter = savedChapterNumber(for: book, model: model)
         return chapter > 1 ? "\(chapter)" : "-"
     }
 
-    private var fileSizeText: String {
+    private var sizeText: String {
         guard let url = book.localURL else { return "在线" }
         return fileSizeLabel(for: url)
     }
@@ -973,7 +1327,7 @@ private struct DrawerDetailCard: View {
     var body: some View {
         ZStack(alignment: .topTrailing) {
             VStack(alignment: .leading, spacing: 14) {
-                BookCoverMark(title: book.title, color: bookshelfColor(2), size: .detail)
+                BookCoverArtwork(book: book, index: 2, size: .detail, progress: progressValue)
 
                 VStack(alignment: .leading, spacing: 7) {
                     Text(book.title)
@@ -993,7 +1347,7 @@ private struct DrawerDetailCard: View {
 
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
                     DetailStat(title: "章节", value: chapterText)
-                    DetailStat(title: "类型", value: "TXT")
+                    DetailStat(title: "类型", value: book.contentKindLabel)
                     DetailStat(title: "位置", value: book.locationLabel)
                     DetailStat(title: "大小", value: fileSizeText)
                 }
@@ -1022,8 +1376,7 @@ private struct DrawerDetailCard: View {
     }
 
     private var chapterText: String {
-        guard let url = book.localURL else { return "从头开始" }
-        let chapter = model.savedChapterIndex(for: url) + 1
+        let chapter = savedChapterNumber(for: book, model: model)
         return chapter > 1 ? "第 \(chapter) 章" : "从头开始"
     }
 
@@ -1090,80 +1443,6 @@ private struct EmptyBookShelfView: View {
     }
 }
 
-private struct BookCoverMark: View {
-    enum Size {
-        case large
-        case feature
-        case detail
-
-        var dimensions: CGSize {
-            switch self {
-            case .large:
-                CGSize(width: 72, height: 96)
-            case .feature:
-                CGSize(width: 218, height: 260)
-            case .detail:
-                CGSize(width: 224, height: 170)
-            }
-        }
-
-        var titleSize: CGFloat {
-            switch self {
-            case .large:
-                18
-            case .feature:
-                34
-            case .detail:
-                28
-            }
-        }
-    }
-
-    let title: String
-    let color: Color
-    let size: Size
-
-    var body: some View {
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
-            .fill(
-                LinearGradient(
-                    colors: [color.opacity(0.92), color.opacity(0.62), Color.readerAccent.opacity(0.72)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .frame(width: size.dimensions.width, height: size.dimensions.height)
-            .overlay(alignment: .topLeading) {
-                Rectangle()
-                    .fill(.black.opacity(0.16))
-                    .frame(width: 12)
-            }
-            .overlay(alignment: .topTrailing) {
-                Text(shortTitle(title))
-                    .font(.custom("Songti SC", size: size.titleSize, relativeTo: .title))
-                    .fontWeight(.semibold)
-                    .foregroundStyle(.white.opacity(0.92))
-                    .lineLimit(3)
-                    .multilineTextAlignment(.center)
-                    .padding(size == .large ? 10 : 22)
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(.white.opacity(0.18), lineWidth: 1)
-            }
-            .shadow(color: .black.opacity(0.14), radius: 18, x: 0, y: 10)
-    }
-
-    private func shortTitle(_ title: String) -> String {
-        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.count > 4 else {
-            return trimmed
-        }
-
-        return String(trimmed.prefix(4))
-    }
-}
-
 private struct ProgressStrip: View {
     let progress: Double
     let color: Color
@@ -1184,24 +1463,62 @@ private struct ProgressStrip: View {
     }
 }
 
+private struct ContinuePill: View {
+    var body: some View {
+        HStack(spacing: 6) {
+            Text("继续阅读")
+            Image(systemName: "arrow.right")
+                .font(.system(size: 11, weight: .bold))
+        }
+        .font(.system(size: 13, weight: .semibold))
+        .foregroundStyle(Color.readerAccent)
+        .frame(maxWidth: .infinity)
+        .frame(height: 34)
+        .background(Color.readerAccent.opacity(0.09))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(Color.readerAccent.opacity(0.20), lineWidth: 1)
+        }
+    }
+}
+
+private struct BookShelfPanelIconButton: View {
+    let systemName: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 11, weight: .bold))
+                .frame(width: 28, height: 28)
+        }
+        .buttonStyle(SecondarySidebarButtonStyle())
+    }
+}
+
 private struct BookCardDeleteButton: View {
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             Image(systemName: "xmark")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 20, height: 20)
-                .background(Color.red.opacity(0.88))
-                .clipShape(Circle())
+                .font(.system(size: 10, weight: .heavy))
+                .foregroundStyle(deleteColor.opacity(0.82))
+                .frame(width: 24, height: 24)
+                .background(Color.readerPanel.opacity(0.78))
+                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
                 .overlay {
-                    Circle().stroke(.white.opacity(0.6), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .stroke(deleteColor.opacity(0.22), lineWidth: 1)
                 }
-                .shadow(color: .black.opacity(0.18), radius: 3, x: 0, y: 1)
         }
         .buttonStyle(.plain)
         .help("移除")
+    }
+
+    private var deleteColor: Color {
+        Color(nsColor: NSColor(red: 0.620, green: 0.180, blue: 0.130, alpha: 1))
     }
 }
 
@@ -1351,6 +1668,8 @@ private struct BookAuthorLabel: View {
 }
 
 private struct FileBadge: View {
+    let isOnline: Bool
+
     var body: some View {
         RoundedRectangle(cornerRadius: 5, style: .continuous)
             .fill(
@@ -1365,10 +1684,19 @@ private struct FileBadge: View {
                 RoundedRectangle(cornerRadius: 5, style: .continuous)
                     .stroke(Color.sidebarBorder, lineWidth: 1)
             }
+            .overlay {
+                if isOnline {
+                    Image(systemName: "network")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color.readerAccent.opacity(0.86))
+                }
+            }
             .overlay(alignment: .topTrailing) {
-                TriangleFold()
-                    .fill(Color.primary.opacity(0.12))
-                    .frame(width: 8, height: 8)
+                if isOnline == false {
+                    TriangleFold()
+                        .fill(Color.primary.opacity(0.12))
+                        .frame(width: 8, height: 8)
+                }
             }
     }
 }
@@ -1402,6 +1730,15 @@ private extension Book {
         return "在线书源"
     }
 
+    var isOnline: Bool {
+        if case .online = origin { return true }
+        return false
+    }
+
+    var contentKindLabel: String {
+        isOnline ? "在线" : "TXT"
+    }
+
     var helpPath: String {
         switch origin {
         case .local(let url):
@@ -1410,10 +1747,46 @@ private extension Book {
             return bookUrl
         }
     }
+
+    var coverTaskID: String {
+        switch origin {
+        case .local(let url):
+            return url.path
+        case .online(let sourceId, let bookUrl):
+            return "\(sourceId)|\(bookUrl)"
+        }
+    }
+
+    var coverSeed: String {
+        "\(title)|\(author ?? "")|\(coverTaskID)"
+    }
+}
+
+@MainActor
+private func savedChapterNumber(for book: Book, model: ReaderModel) -> Int {
+    switch book.origin {
+    case .local(let url):
+        model.savedChapterIndex(for: url) + 1
+    case .online:
+        model.savedOnlineChapterIndex(for: book) + 1
+    }
 }
 
 private func bookshelfColor(_ index: Int) -> Color {
-    let colors: [NSColor] = [
+    Color(nsColor: bookshelfColors[index % bookshelfColors.count])
+}
+
+private func bookshelfColor(for book: Book, fallbackIndex: Int) -> Color {
+    let seed = book.coverSeed
+    guard seed.isEmpty == false else {
+        return bookshelfColor(fallbackIndex)
+    }
+
+    return bookshelfColor(deterministicIndex(for: seed))
+}
+
+private var bookshelfColors: [NSColor] {
+    [
         NSColor(red: 0.561, green: 0.310, blue: 0.180, alpha: 1),
         NSColor(red: 0.184, green: 0.435, blue: 0.384, alpha: 1),
         NSColor(red: 0.322, green: 0.376, blue: 0.467, alpha: 1),
@@ -1423,8 +1796,15 @@ private func bookshelfColor(_ index: Int) -> Color {
         NSColor(red: 0.600, green: 0.294, blue: 0.220, alpha: 1),
         NSColor(red: 0.349, green: 0.318, blue: 0.290, alpha: 1)
     ]
+}
 
-    return Color(nsColor: colors[index % colors.count])
+private func deterministicIndex(for seed: String) -> Int {
+    var hash: UInt64 = 1469598103934665603
+    for scalar in seed.unicodeScalars {
+        hash ^= UInt64(scalar.value)
+        hash &*= 1099511628211
+    }
+    return Int(hash % UInt64(bookshelfColors.count))
 }
 
 private func fileSizeLabel(for url: URL) -> String {
@@ -1437,6 +1817,15 @@ private func fileSizeLabel(for url: URL) -> String {
     formatter.allowedUnits = [.useKB, .useMB]
     formatter.countStyle = .file
     return formatter.string(fromByteCount: Int64(fileSize))
+}
+
+private func shortCoverTitle(from title: String, maxCharacters: Int) -> String {
+    let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard trimmed.count > maxCharacters else {
+        return trimmed
+    }
+
+    return String(trimmed.prefix(maxCharacters))
 }
 
 private func spineDisplayTitle(from title: String) -> String {
