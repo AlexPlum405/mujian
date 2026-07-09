@@ -568,6 +568,33 @@ struct OnlineSearchPanel: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 24)
+            } else if let progress = model.downloadProgress {
+                VStack(spacing: 8) {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("下载《\(progress.title)》")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text("\(progress.current)/\(progress.total)")
+                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(Color.readerAccent)
+                    }
+                    if progress.total > 0 {
+                        ProgressView(value: Double(progress.current), total: Double(progress.total))
+                            .tint(Color.readerAccent)
+                    }
+                    HStack {
+                        Spacer()
+                        Button("取消") {
+                            model.cancelDownload()
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.vertical, 16)
             } else if model.onlineSearchResults.isEmpty {
                 VStack(spacing: 10) {
                     Image(systemName: "magnifyingglass")

@@ -38,6 +38,7 @@ final class ReaderModel: ObservableObject {
     @Published private(set) var isLoadingOnline = false
     @Published private(set) var onlineBook: Book?
     @Published private(set) var onlineChapters: [OnlineChapter] = []
+    @Published private(set) var downloadProgress: DownloadProgress?
     @Published private(set) var onlineChapterContents: [Int: String] = [:]
 
     let bossKey: BossKeyController
@@ -677,28 +678,45 @@ final class ReaderModel: ObservableObject {
 
     func downloadOnlineBook(_ result: OnlineSearchResult) {
         Task {
-            isLoadingOnline = true
             guard let source = bookSources.first(where: { $0.id == result.sourceId }) else {
                 errorMessage = "找不到对应的书源。"
-                isLoadingOnline = false
                 return
             }
+
+            downloadProgress = DownloadProgress(title: result.title, current: 0, total: 0)
+
             do {
                 let chapters = try await bookSourceEngine.loadChapterList(bookUrl: result.bookUrl, source: source)
+                downloadProgress = DownloadProgress(title: result.title, current: 0, total: chapters.count)
+
                 var pieces: [String] = []
-                for chapter in chapters {
+                for (index, chapter) in chapters.enumerated() {
+                    if Task.isCancelled { break }
+                    downloadProgress = DownloadProgress(title: result.title, current: index + 1, total: chapters.count)
                     let content = try await bookSourceEngine.loadChapterContent(chapterUrl: chapter.url, source: source)
                     pieces.append(chapter.title + "\n" + content)
                 }
+
                 let text = pieces.joined(separator: "\n\n")
                 let url = saveDownloadedText(text, title: result.title)
-                isLoadingOnline = false
-                await loadTextFile(from: url)
+                downloadProgress = nil
+
+                let book = Book(
+                    title: result.title,
+                    author: result.author,
+                    origin: .local(url)
+                )
+                bookRepository.saveBook(book)
+                books = bookRepository.loadAllBooks()
             } catch {
                 errorMessage = (error as? LocalizedError)?.errorDescription ?? "下载失败。"
-                isLoadingOnline = false
+                downloadProgress = nil
             }
         }
+    }
+
+    func cancelDownload() {
+        downloadProgress = nil
     }
 
     private func saveDownloadedText(_ text: String, title: String) -> URL {

@@ -27,6 +27,12 @@ enum BookSourceError: LocalizedError, Equatable {
     }
 }
 
+struct DownloadProgress: Equatable {
+    let title: String
+    let current: Int
+    let total: Int
+}
+
 struct OnlineSearchResult: Identifiable, Equatable {
     let id: String
     let title: String
