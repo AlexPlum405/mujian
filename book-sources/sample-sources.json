@@ -5,7 +5,7 @@
     "enabled": true,
     "searchUrl": "https://www.22biqu.com/ss/,{\"method\":\"POST\",\"body\":\"searchkey={{searchKey}}&Submit=搜索\"}",
     "ruleSearch": {
-      "bookList": "css:body > div.container > div > div > ul > li",
+      "bookList": "css:ul.txt-list > li",
       "name": "css:span.s2 > a@text",
       "author": "css:span.s4@text",
       "bookUrl": "css:span.s2 > a@href",
@@ -14,7 +14,7 @@
       "lastChapter": "css:span.s3 > a@text"
     },
     "ruleToc": {
-      "chapterList": "css:div:nth-child(4) > ul > li > a",
+      "chapterList": "css:dd a",
       "chapterName": "@text",
       "chapterUrl": "@href"
     },
@@ -54,27 +54,6 @@
       "name": "css:.bookname > a@text",
       "author": "css:.author@text",
       "bookUrl": "css:.bookname > a@href",
-      "intro": "css:.intro@text"
-    },
-    "ruleToc": {
-      "chapterList": "css:dd a",
-      "chapterName": "@text",
-      "chapterUrl": "@href"
-    },
-    "ruleContent": {
-      "content": "css:#content@text"
-    }
-  },
-  {
-    "bookSourceUrl": "https://www.biquge365.net/",
-    "bookSourceName": "笔趣阁365",
-    "enabled": true,
-    "searchUrl": "https://www.biquge365.net/search.php,{\"method\":\"POST\",\"body\":\"searchkey={{searchKey}}\"}",
-    "ruleSearch": {
-      "bookList": "css:.result-item",
-      "name": "css:.bookname a@text",
-      "author": "css:.author@text",
-      "bookUrl": "css:.bookname a@href",
       "intro": "css:.intro@text"
     },
     "ruleToc": {

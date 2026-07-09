@@ -239,6 +239,21 @@ final class LegadoBookSourceEngine: BookSourceEngine {
         isPaused = false
     }
 
+    private func encodeFormBody(_ body: String) -> String {
+        let pairs = body.split(separator: "&")
+        let encoded = pairs.map { pair -> String in
+            let parts = pair.split(separator: "=", maxSplits: 1)
+            if parts.count == 2 {
+                let key = String(parts[0])
+                let value = String(parts[1])
+                let encodedValue = value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value
+                return "\(key)=\(encodedValue)"
+            }
+            return String(pair)
+        }
+        return encoded.joined(separator: "&")
+    }
+
     private func fetchData(url: URL, option: LegadoUrlOption? = nil) async throws -> Data {
         var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 10)
         request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36", forHTTPHeaderField: "User-Agent")
@@ -249,10 +264,12 @@ final class LegadoBookSourceEngine: BookSourceEngine {
                 if let body = option.body {
                     if body.contains("{") && body.contains("}") {
                         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                        request.httpBody = body.data(using: .utf8)
                     } else {
                         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+                        let encodedBody = encodeFormBody(body)
+                        request.httpBody = encodedBody.data(using: .utf8)
                     }
-                    request.httpBody = body.data(using: .utf8)
                 }
             }
             for (key, value) in option.headers {

@@ -15,7 +15,10 @@ enum LegadoUrlParser {
         var option = LegadoUrlOption()
 
         if let braceIndex = raw.firstIndex(of: "{") {
-            let urlPart = String(raw[..<braceIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+            var urlPart = String(raw[..<braceIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if urlPart.hasSuffix(",") {
+                urlPart = String(urlPart.dropLast()).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
             let jsonPart = String(raw[braceIndex...])
 
             if let data = jsonPart.data(using: .utf8),
