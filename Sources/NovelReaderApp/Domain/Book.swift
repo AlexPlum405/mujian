@@ -1,6 +1,6 @@
 import Foundation
 
-struct Book: Identifiable, Equatable {
+struct Book: Identifiable, Equatable, Sendable {
     let id: UUID
     var title: String
     var author: String?
@@ -37,12 +37,12 @@ struct Book: Identifiable, Equatable {
     }
 }
 
-enum BookOrigin: Equatable {
+enum BookOrigin: Equatable, Sendable {
     case local(URL)
     case online(sourceId: String, bookUrl: String)
 }
 
-struct ReadPosition: Equatable {
+struct ReadPosition: Equatable, Sendable {
     var chapterIndex: Int
     var scrollOffset: Double
     var pageIndex: Int?

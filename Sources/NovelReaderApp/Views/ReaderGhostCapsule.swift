@@ -22,7 +22,7 @@ struct ReaderGhostCapsule: View {
                 .disabled(model.hasDocument == false)
 
                 GhostCapsuleButton(
-                    help: "搜索",
+                    help: "正文搜索",
                     isActive: model.activePanel == .search
                 ) {
                     model.togglePanel(.search)

@@ -1,0 +1,191 @@
+[
+  {
+    "bookSourceUrl": "https://zh.wikisource.org/",
+    "bookSourceName": "维基文库中文（公共领域）",
+    "enabled": true,
+    "searchUrl": "https://zh.wikisource.org/w/index.php?search={{searchKey}}&title=Special%3A%E6%90%9C%E7%B4%A2&profile=advanced&fulltext=1&ns0=1",
+    "ruleSearch": {
+      "bookList": "css:.mw-search-result",
+      "name": "css:.mw-search-result-heading a@text",
+      "author": "css:.no-author@text",
+      "bookUrl": "css:.mw-search-result-heading a@href",
+      "intro": "css:.searchresult@text"
+    },
+    "ruleToc": {
+      "chapterList": "css:#mw-content-text .mw-parser-output a[title*=\"/第\"], #mw-content-text .mw-parser-output a[title*=\"/卷\"], #mw-content-text .mw-parser-output a[title*=\"/回\"], #mw-content-text .mw-parser-output a[title*=\"/章\"]",
+      "chapterName": "@text",
+      "chapterUrl": "@href"
+    },
+    "ruleContent": {
+      "content": "css:#mw-content-text .mw-parser-output > p, #mw-content-text .mw-parser-output > div.poem@html"
+    }
+  },
+  {
+    "bookSourceUrl": "https://en.wikisource.org/",
+    "bookSourceName": "Wikisource English（Public Domain）",
+    "enabled": true,
+    "searchUrl": "https://en.wikisource.org/w/index.php?search={{searchKey}}&title=Special%3ASearch&profile=advanced&fulltext=1&ns0=1",
+    "ruleSearch": {
+      "bookList": "css:.mw-search-result",
+      "name": "css:.mw-search-result-heading a@text",
+      "author": "css:.no-author@text",
+      "bookUrl": "css:.mw-search-result-heading a@href",
+      "intro": "css:.searchresult@text"
+    },
+    "ruleToc": {
+      "chapterList": "css:#mw-content-text .mw-parser-output .wst-auxtoc a[title*=\"/Chapter\"], #mw-content-text .mw-parser-output .wst-auxtoc a[href*=\"/Chapter_\"], #mw-content-text .mw-parser-output .wst-auxtoc a[title*=\"/Volume\"], #mw-content-text .mw-parser-output .wst-auxtoc a[href*=\"/Volume_\"]",
+      "chapterName": "@text",
+      "chapterUrl": "@href"
+    },
+    "ruleContent": {
+      "content": "css:#mw-content-text .mw-parser-output .prp-pages-output@html"
+    }
+  },
+  {
+    "bookSourceUrl": "https://www.aozora.gr.jp/index_pages/person879.html",
+    "bookSourceName": "青空文库·芥川龙之介",
+    "enabled": true,
+    "searchUrl": "https://www.aozora.gr.jp/index_pages/person879.html",
+    "ruleSearch": {
+      "bookList": "css:ol li",
+      "name": "css:a@text",
+      "author": "css:.no-author@text",
+      "bookUrl": "css:a@href",
+      "intro": "@text"
+    },
+    "ruleToc": {
+      "chapterList": "css:a[href*=\"/files/\"][href$=\".html\"], a[href^=\"./files/\"][href$=\".html\"]",
+      "chapterName": "@text",
+      "chapterUrl": "@href"
+    },
+    "ruleContent": {
+      "content": "css:.main_text@html"
+    }
+  },
+  {
+    "bookSourceUrl": "https://www.aozora.gr.jp/index_pages/person35.html",
+    "bookSourceName": "青空文库·太宰治",
+    "enabled": true,
+    "searchUrl": "https://www.aozora.gr.jp/index_pages/person35.html",
+    "ruleSearch": {
+      "bookList": "css:ol li",
+      "name": "css:a@text",
+      "author": "css:.no-author@text",
+      "bookUrl": "css:a@href",
+      "intro": "@text"
+    },
+    "ruleToc": {
+      "chapterList": "css:a[href*=\"/files/\"][href$=\".html\"], a[href^=\"./files/\"][href$=\".html\"]",
+      "chapterName": "@text",
+      "chapterUrl": "@href"
+    },
+    "ruleContent": {
+      "content": "css:.main_text@html"
+    }
+  },
+  {
+    "bookSourceUrl": "https://www.aozora.gr.jp/index_pages/person148.html",
+    "bookSourceName": "青空文库·夏目漱石",
+    "enabled": true,
+    "searchUrl": "https://www.aozora.gr.jp/index_pages/person148.html",
+    "ruleSearch": {
+      "bookList": "css:ol li",
+      "name": "css:a@text",
+      "author": "css:.no-author@text",
+      "bookUrl": "css:a@href",
+      "intro": "@text"
+    },
+    "ruleToc": {
+      "chapterList": "css:a[href*=\"/files/\"][href$=\".html\"], a[href^=\"./files/\"][href$=\".html\"]",
+      "chapterName": "@text",
+      "chapterUrl": "@href"
+    },
+    "ruleContent": {
+      "content": "css:.main_text@html"
+    }
+  },
+  {
+    "bookSourceUrl": "https://www.aozora.gr.jp/index_pages/person81.html",
+    "bookSourceName": "青空文库·宫泽贤治",
+    "enabled": true,
+    "searchUrl": "https://www.aozora.gr.jp/index_pages/person81.html",
+    "ruleSearch": {
+      "bookList": "css:ol li",
+      "name": "css:a@text",
+      "author": "css:.no-author@text",
+      "bookUrl": "css:a@href",
+      "intro": "@text"
+    },
+    "ruleToc": {
+      "chapterList": "css:a[href*=\"/files/\"][href$=\".html\"], a[href^=\"./files/\"][href$=\".html\"]",
+      "chapterName": "@text",
+      "chapterUrl": "@href"
+    },
+    "ruleContent": {
+      "content": "css:.main_text@html"
+    }
+  },
+  {
+    "bookSourceUrl": "https://www.aozora.gr.jp/index_pages/person129.html",
+    "bookSourceName": "青空文库·森鸥外",
+    "enabled": true,
+    "searchUrl": "https://www.aozora.gr.jp/index_pages/person129.html",
+    "ruleSearch": {
+      "bookList": "css:ol li",
+      "name": "css:a@text",
+      "author": "css:.no-author@text",
+      "bookUrl": "css:a@href",
+      "intro": "@text"
+    },
+    "ruleToc": {
+      "chapterList": "css:a[href*=\"/files/\"][href$=\".html\"], a[href^=\"./files/\"][href$=\".html\"]",
+      "chapterName": "@text",
+      "chapterUrl": "@href"
+    },
+    "ruleContent": {
+      "content": "css:.main_text@html"
+    }
+  },
+  {
+    "bookSourceUrl": "https://www.aozora.gr.jp/index_pages/person50.html",
+    "bookSourceName": "青空文库·泉镜花",
+    "enabled": true,
+    "searchUrl": "https://www.aozora.gr.jp/index_pages/person50.html",
+    "ruleSearch": {
+      "bookList": "css:ol li",
+      "name": "css:a@text",
+      "author": "css:.no-author@text",
+      "bookUrl": "css:a@href",
+      "intro": "@text"
+    },
+    "ruleToc": {
+      "chapterList": "css:a[href*=\"/files/\"][href$=\".html\"], a[href^=\"./files/\"][href$=\".html\"]",
+      "chapterName": "@text",
+      "chapterUrl": "@href"
+    },
+    "ruleContent": {
+      "content": "css:.main_text@html"
+    }
+  },
+  {
+    "bookSourceUrl": "https://www.aozora.gr.jp/index_pages/person64.html",
+    "bookSourceName": "青空文库·樋口一叶",
+    "enabled": true,
+    "searchUrl": "https://www.aozora.gr.jp/index_pages/person64.html",
+    "ruleSearch": {
+      "bookList": "css:ol li",
+      "name": "css:a@text",
+      "author": "css:.no-author@text",
+      "bookUrl": "css:a@href",
+      "intro": "@text"
+    },
+    "ruleToc": {
+      "chapterList": "css:a[href*=\"/files/\"][href$=\".html\"], a[href^=\"./files/\"][href$=\".html\"]",
+      "chapterName": "@text",
+      "chapterUrl": "@href"
+    },
+    "ruleContent": {
+      "content": "css:.main_text@html"
+    }
+  }
+]

@@ -315,18 +315,368 @@ struct ReaderModelTests {
         #expect(hider.hideCallCount == 1)
     }
 
+    @Test func openingOnlineBookPrefetchesNextChapter() async throws {
+        let repository = InMemoryBookRepository()
+        let source = makeSource()
+        let book = Book(title: "在线书", origin: .online(sourceId: source.id, bookUrl: "https://example.com/book"))
+        repository.saveSource(source)
+        repository.saveBook(book)
+
+        let engine = StubBookSourceEngine()
+        engine.chapters = [
+            OnlineChapter(title: "第一章", url: "https://example.com/c1"),
+            OnlineChapter(title: "第二章", url: "https://example.com/c2")
+        ]
+        engine.content = "在线正文"
+
+        let model = makeModel(bookRepository: repository, bookSourceEngine: engine)
+
+        await model.openBook(book)
+
+        #expect(model.onlineChapterContents[0] == "在线正文")
+
+        for _ in 0..<20 {
+            if model.onlineChapterContents[1] != nil {
+                break
+            }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+
+        #expect(model.onlineChapterContents[1] == "在线正文")
+    }
+
+    @Test func openingOnlineBookUsesCachedDirectoryAndChapterWithoutNetwork() async throws {
+        let repository = InMemoryBookRepository()
+        let source = makeSource()
+        let book = Book(title: "缓存书", origin: .online(sourceId: source.id, bookUrl: "https://example.com/book"))
+        let cacheDirectory = try temporaryDirectory()
+        repository.saveSource(source)
+        repository.saveBook(book)
+
+        let firstEngine = StubBookSourceEngine()
+        firstEngine.chapters = [
+            OnlineChapter(title: "第一章", url: "https://example.com/c1"),
+            OnlineChapter(title: "第二章", url: "https://example.com/c2")
+        ]
+        firstEngine.content = "缓存正文"
+
+        let firstModel = makeModel(
+            bookRepository: repository,
+            bookSourceEngine: firstEngine,
+            onlineCacheDirectory: cacheDirectory
+        )
+
+        await firstModel.openBook(book)
+
+        #expect(firstModel.chapterCount == 2)
+        #expect(firstModel.documentText == "缓存正文")
+
+        let offlineEngine = StubBookSourceEngine()
+        offlineEngine.chapterListError = BookSourceError.network("不该请求目录")
+        offlineEngine.contentError = BookSourceError.network("不该请求正文")
+
+        let secondModel = makeModel(
+            bookRepository: repository,
+            bookSourceEngine: offlineEngine,
+            onlineCacheDirectory: cacheDirectory
+        )
+
+        await secondModel.openBook(book)
+
+        #expect(secondModel.chapterCount == 2)
+        #expect(secondModel.chapterDirectoryItems.map(\.title) == ["第一章", "第二章"])
+        #expect(secondModel.documentText == "缓存正文")
+        #expect(secondModel.errorMessage == nil)
+        #expect(offlineEngine.loadChapterListCallCount == 0)
+        #expect(offlineEngine.loadChapterContentCallCount == 0)
+    }
+
+    @Test func openingOnlineBookRefreshesStaleCachedDirectoryInBackground() async throws {
+        let repository = InMemoryBookRepository()
+        let source = makeSource()
+        let book = Book(title: "旧目录书", origin: .online(sourceId: source.id, bookUrl: "https://example.com/book"))
+        let cacheDirectory = try temporaryDirectory()
+        repository.saveSource(source)
+        repository.saveBook(book)
+
+        let staleProvider = OnlineChapterContentProvider(
+            engine: StubBookSourceEngine(),
+            sourcesProvider: { [source] },
+            bookLookup: { id in id == book.id ? book : nil },
+            cacheDirectory: cacheDirectory
+        )
+        staleProvider.preloadChapterList([
+            OnlineChapter(title: "第一章", url: "https://example.com/c1"),
+            OnlineChapter(title: "第二章", url: "https://example.com/c2")
+        ], for: book.id)
+
+        let engine = DelayedChapterListEngine(
+            chapters: [
+                OnlineChapter(title: "第一章", url: "https://example.com/c1"),
+                OnlineChapter(title: "第二章", url: "https://example.com/c2"),
+                OnlineChapter(title: "第三章", url: "https://example.com/c3"),
+                OnlineChapter(title: "第四章", url: "https://example.com/c4")
+            ],
+            content: "刷新正文",
+            delayNanoseconds: 120_000_000
+        )
+        let model = makeModel(
+            bookRepository: repository,
+            bookSourceEngine: engine,
+            onlineCacheDirectory: cacheDirectory
+        )
+
+        await model.openBook(book)
+
+        #expect(model.chapterCount == 2)
+
+        for _ in 0..<20 {
+            if model.chapterCount == 4 {
+                break
+            }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+
+        #expect(model.chapterCount == 4)
+        #expect(model.chapterDirectoryItems.map(\.title) == ["第一章", "第二章", "第三章", "第四章"])
+        #expect(engine.loadChapterListCallCount == 1)
+
+        let offlineEngine = StubBookSourceEngine()
+        offlineEngine.chapterListError = BookSourceError.network("刷新后不该重新请求目录")
+        offlineEngine.content = "离线正文"
+        let secondModel = makeModel(
+            bookRepository: repository,
+            bookSourceEngine: offlineEngine,
+            onlineCacheDirectory: cacheDirectory
+        )
+
+        await secondModel.openBook(book)
+
+        #expect(secondModel.chapterCount == 4)
+        #expect(offlineEngine.loadChapterListCallCount == 0)
+    }
+
+    @Test func openingOnlineBookRefreshesCachedDirectoryWhenOrderChanges() async throws {
+        let repository = InMemoryBookRepository()
+        let source = makeSource()
+        let book = Book(title: "错序目录书", origin: .online(sourceId: source.id, bookUrl: "https://example.com/book"))
+        let cacheDirectory = try temporaryDirectory()
+        repository.saveSource(source)
+        repository.saveBook(book)
+
+        let staleProvider = OnlineChapterContentProvider(
+            engine: StubBookSourceEngine(),
+            sourcesProvider: { [source] },
+            bookLookup: { id in id == book.id ? book : nil },
+            cacheDirectory: cacheDirectory
+        )
+        staleProvider.preloadChapterList([
+            OnlineChapter(title: "第1945章 立序理旧罪", url: "https://example.com/c1945"),
+            OnlineChapter(title: "第一章 阳芝武毅", url: "https://example.com/c1")
+        ], for: book.id)
+
+        let engine = DelayedChapterListEngine(
+            chapters: [
+                OnlineChapter(title: "第一章 阳芝武毅", url: "https://example.com/c1"),
+                OnlineChapter(title: "第1945章 立序理旧罪", url: "https://example.com/c1945")
+            ],
+            content: "刷新正文",
+            delayNanoseconds: 120_000_000
+        )
+        let model = makeModel(
+            bookRepository: repository,
+            bookSourceEngine: engine,
+            onlineCacheDirectory: cacheDirectory
+        )
+
+        await model.openBook(book)
+
+        #expect(model.chapterDirectoryItems.first?.title == "第1945章 立序理旧罪")
+
+        for _ in 0..<20 {
+            if model.chapterDirectoryItems.first?.title == "第一章 阳芝武毅" {
+                break
+            }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+
+        #expect(model.chapterCount == 2)
+        #expect(model.chapterDirectoryItems.map(\.title) == ["第一章 阳芝武毅", "第1945章 立序理旧罪"])
+    }
+
+    @Test func openOnlineSearchSeedsQueryAndSearchesEnabledSources() async throws {
+        let repository = InMemoryBookRepository()
+        let source = makeSource()
+        repository.saveSource(source)
+
+        let engine = StubBookSourceEngine()
+        engine.searchResults = [
+            OnlineSearchResult(
+                title: "寂静杀戮",
+                author: "熊狼狗",
+                bookUrl: "https://example.com/book",
+                sourceId: source.id,
+                sourceName: source.name
+            )
+        ]
+
+        let model = makeModel(bookRepository: repository, bookSourceEngine: engine)
+
+        model.openOnlineSearch(query: "  寂静杀戮  ")
+
+        for _ in 0..<20 {
+            if model.onlineSearchResults.isEmpty == false {
+                break
+            }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+
+        #expect(model.activePanel == .onlineSearch)
+        #expect(model.onlineSearchQuery == "寂静杀戮")
+        #expect(engine.lastSearchQuery == "寂静杀戮")
+        #expect(model.onlineSearchResults.first?.title == "寂静杀戮")
+    }
+
+    @Test func downloadOnlineBookContinuesAfterPanelCloses() async throws {
+        let repository = InMemoryBookRepository()
+        let source = makeSource()
+        repository.saveSource(source)
+
+        let engine = StubBookSourceEngine()
+        engine.chapters = [
+            OnlineChapter(title: "第一章", url: "https://example.com/c1"),
+            OnlineChapter(title: "第二章", url: "https://example.com/c2")
+        ]
+        engine.content = "下载正文"
+
+        let model = makeModel(bookRepository: repository, bookSourceEngine: engine)
+        model.togglePanel(.onlineSearch)
+
+        model.downloadOnlineBook(OnlineSearchResult(
+            title: "下载书",
+            author: "作者",
+            bookUrl: "https://example.com/book",
+            sourceId: source.id,
+            sourceName: source.name
+        ))
+        model.closePanel()
+
+        for _ in 0..<20 {
+            if model.downloadProgress == nil, model.books.contains(where: { $0.title == "下载书" }) {
+                break
+            }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+
+        #expect(model.activePanel == nil)
+        #expect(model.downloadProgress == nil)
+        #expect(model.books.contains { $0.title == "下载书" })
+    }
+
+    @Test func cancelDownloadStopsTaskWithoutSavingBook() async throws {
+        let repository = InMemoryBookRepository()
+        let source = makeSource()
+        repository.saveSource(source)
+
+        let engine = SlowDownloadEngine()
+        engine.chapters = [
+            OnlineChapter(title: "第一章", url: "https://example.com/c1")
+        ]
+
+        let model = makeModel(bookRepository: repository, bookSourceEngine: engine)
+        model.downloadOnlineBook(OnlineSearchResult(
+            title: "慢下载",
+            author: nil,
+            bookUrl: "https://example.com/book",
+            sourceId: source.id,
+            sourceName: source.name
+        ))
+
+        for _ in 0..<20 {
+            if model.downloadProgress?.total == 1 {
+                break
+            }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+
+        model.cancelDownload()
+        try await Task.sleep(nanoseconds: 120_000_000)
+
+        #expect(model.downloadProgress == nil)
+        #expect(model.errorMessage == nil)
+        #expect(model.books.contains { $0.title == "慢下载" } == false)
+        #expect(engine.loadChapterContentCallCount == 1)
+    }
+
+    @Test func onlineBookExposesLightweightDirectoryItemsForLargeToc() async throws {
+        let repository = InMemoryBookRepository()
+        let source = makeSource()
+        let book = Book(title: "长篇在线书", origin: .online(sourceId: source.id, bookUrl: "https://example.com/book"))
+        repository.saveSource(source)
+        repository.saveBook(book)
+
+        let engine = StubBookSourceEngine()
+        engine.chapters = (0..<5_000).map { index in
+            OnlineChapter(title: "第 \(index + 1) 章", url: "https://example.com/c\(index)")
+        }
+        engine.content = "在线正文"
+
+        let model = makeModel(bookRepository: repository, bookSourceEngine: engine)
+
+        await model.openBook(book)
+
+        #expect(model.chapterCount == 5_000)
+        #expect(model.chapterDirectoryItems.count == 5_000)
+        #expect(model.chapterDirectoryItems[4_999].title == "第 5000 章")
+        #expect(model.currentChapter?.body == "在线正文")
+
+        model.selectChapter(id: 4_999)
+
+        for _ in 0..<20 {
+            if model.onlineChapterContents[4_999] != nil {
+                break
+            }
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+
+        #expect(model.selectedChapterIndex == 4_999)
+        #expect(model.currentChapter?.title == "第 5000 章")
+        #expect(model.currentChapter?.body == "在线正文")
+    }
+
     private func makeModel(
         defaults: UserDefaults? = nil,
         registrar: FakeBossKeyRegistrar = FakeBossKeyRegistrar(),
         hider: FakeWindowHider = FakeWindowHider(),
-        bookRepository: BookRepository = InMemoryBookRepository()
+        bookRepository: BookRepository = InMemoryBookRepository(),
+        bookSourceEngine: BookSourceEngine = StubBookSourceEngine(),
+        onlineCacheDirectory: URL? = nil
     ) -> ReaderModel {
         ReaderModel(
             defaults: defaults ?? isolatedDefaults(),
             loader: TextFileLoader(),
             bossKeyRegistrar: registrar,
             windowHider: hider,
-            bookRepository: bookRepository
+            bookRepository: bookRepository,
+            bookSourceEngine: bookSourceEngine,
+            onlineCacheDirectory: onlineCacheDirectory
+        )
+    }
+
+    private func makeSource(id: String = "s1", name: String = "源一", url: String = "https://example.com") -> BookSource {
+        BookSource(
+            id: id,
+            name: name,
+            url: url,
+            searchUrl: "https://example.com/s?q={{searchKey}}",
+            isEnabled: true,
+            searchRule: ".item",
+            titleRule: ".title@text",
+            authorRule: ".author@text",
+            chapterListRule: ".chapters>li",
+            chapterTitleRule: "a@text",
+            chapterUrlRule: "a@href",
+            contentRule: "#content@text"
         )
     }
 
@@ -344,6 +694,13 @@ struct ReaderModelTests {
         let url = directory.appendingPathComponent(name)
         try contents.write(to: url, atomically: true, encoding: .utf8)
         return url
+    }
+
+    private func temporaryDirectory() throws -> URL {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
     }
 }
 
@@ -384,4 +741,56 @@ private final class FakeWindowHider: WindowHiding {
     func hideReadingWindow() {
         hideCallCount += 1
     }
+}
+
+private final class SlowDownloadEngine: BookSourceEngine, @unchecked Sendable {
+    var chapters: [OnlineChapter] = []
+    private(set) var loadChapterContentCallCount = 0
+
+    func search(query: String, sources: [BookSource]) async -> [OnlineSearchResult] {
+        []
+    }
+
+    func loadChapterList(bookUrl: String, source: BookSource) async throws -> [OnlineChapter] {
+        chapters
+    }
+
+    func loadChapterContent(chapterUrl: String, source: BookSource) async throws -> String {
+        loadChapterContentCallCount += 1
+        try await Task.sleep(nanoseconds: 2_000_000_000)
+        return "慢正文"
+    }
+
+    func pause() {}
+    func resume() {}
+}
+
+private final class DelayedChapterListEngine: BookSourceEngine, @unchecked Sendable {
+    let chapters: [OnlineChapter]
+    let content: String
+    let delayNanoseconds: UInt64
+    private(set) var loadChapterListCallCount = 0
+
+    init(chapters: [OnlineChapter], content: String, delayNanoseconds: UInt64) {
+        self.chapters = chapters
+        self.content = content
+        self.delayNanoseconds = delayNanoseconds
+    }
+
+    func search(query: String, sources: [BookSource]) async -> [OnlineSearchResult] {
+        []
+    }
+
+    func loadChapterList(bookUrl: String, source: BookSource) async throws -> [OnlineChapter] {
+        loadChapterListCallCount += 1
+        try await Task.sleep(nanoseconds: delayNanoseconds)
+        return chapters
+    }
+
+    func loadChapterContent(chapterUrl: String, source: BookSource) async throws -> String {
+        content
+    }
+
+    func pause() {}
+    func resume() {}
 }

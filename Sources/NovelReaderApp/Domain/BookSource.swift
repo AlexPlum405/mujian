@@ -1,6 +1,6 @@
 import Foundation
 
-struct BookSource: Identifiable, Equatable {
+struct BookSource: Identifiable, Equatable, Sendable {
     let id: String
     let name: String
     let url: String

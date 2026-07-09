@@ -4,6 +4,7 @@ struct BookShelfView: View {
     @EnvironmentObject private var model: ReaderModel
     @State private var isSearchPresented = false
     @State private var isSourcesPresented = false
+    @State private var pendingDeleteBook: Book?
 
     private var theme: ReadingTheme { model.readingSettings.theme }
 
@@ -21,11 +22,17 @@ struct BookShelfView: View {
                 } else {
                     switch model.readingSettings.bookshelfStyle {
                     case .desk:
-                        DeskBookShelfLayout(books: model.books)
+                        DeskBookShelfLayout(books: model.books) { book in
+                            pendingDeleteBook = book
+                        }
                     case .spines:
-                        SpineBookShelfLayout(books: model.books)
+                        SpineBookShelfLayout(books: model.books) { book in
+                            pendingDeleteBook = book
+                        }
                     case .drawer:
-                        DrawerBookShelfLayout(books: model.books)
+                        DrawerBookShelfLayout(books: model.books) { book in
+                            pendingDeleteBook = book
+                        }
                     }
                 }
             }
@@ -50,6 +57,16 @@ struct BookShelfView: View {
                     BookSourceManagePanel { isSourcesPresented = false }
                 } onTapOutside: {
                     isSourcesPresented = false
+                }
+            }
+            if let pendingDeleteBook {
+                BookShelfOverlay {
+                    BookDeleteConfirmPanel(book: pendingDeleteBook) {
+                        self.pendingDeleteBook = nil
+                    }
+                    .frame(width: 340)
+                } onTapOutside: {
+                    self.pendingDeleteBook = nil
                 }
             }
         }
@@ -293,6 +310,7 @@ private struct DeskBookShelfLayout: View {
     @EnvironmentObject private var model: ReaderModel
 
     let books: [Book]
+    let requestDelete: (Book) -> Void
 
     private let columns = [
         GridItem(.adaptive(minimum: 156, maximum: 230), spacing: 12, alignment: .top)
@@ -306,7 +324,7 @@ private struct DeskBookShelfLayout: View {
 
             LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
                 ForEach(Array(books.enumerated()), id: \.element.id) { index, book in
-                    DeskBookCard(book: book, index: index)
+                    DeskBookCard(book: book, index: index, requestDelete: requestDelete)
                 }
             }
         }
@@ -379,6 +397,7 @@ private struct DeskBookCard: View {
 
     let book: Book
     let index: Int
+    let requestDelete: (Book) -> Void
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -436,7 +455,9 @@ private struct DeskBookCard: View {
             .help(book.helpPath)
 
             if isHovered {
-                BookCardDeleteButton(bookId: book.id, book: book)
+                BookCardDeleteButton {
+                    requestDelete(book)
+                }
                     .padding(8)
                     .transition(.opacity)
             }
@@ -460,12 +481,13 @@ private struct SpineBookShelfLayout: View {
     @EnvironmentObject private var model: ReaderModel
 
     let books: [Book]
+    let requestDelete: (Book) -> Void
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .top, spacing: 24) {
                 if let firstBook = books.first {
-                    SpineFeatureCard(book: firstBook)
+                    SpineFeatureCard(book: firstBook, requestDelete: requestDelete)
                         .frame(width: 270)
                 }
 
@@ -475,7 +497,7 @@ private struct SpineBookShelfLayout: View {
 
             VStack(alignment: .leading, spacing: 18) {
                 if let firstBook = books.first {
-                    SpineFeatureCard(book: firstBook)
+                    SpineFeatureCard(book: firstBook, requestDelete: requestDelete)
                 }
 
                 SpineShelfRows(books: books)
@@ -496,6 +518,7 @@ private struct SpineFeatureCard: View {
     @State private var isHovered = false
 
     let book: Book
+    let requestDelete: (Book) -> Void
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -543,7 +566,9 @@ private struct SpineFeatureCard: View {
             .help(book.helpPath)
 
             if isHovered {
-                BookCardDeleteButton(bookId: book.id, book: book)
+                BookCardDeleteButton {
+                    requestDelete(book)
+                }
                     .padding(10)
                     .transition(.opacity)
             }
@@ -689,6 +714,7 @@ private struct DrawerBookShelfLayout: View {
     @EnvironmentObject private var model: ReaderModel
 
     let books: [Book]
+    let requestDelete: (Book) -> Void
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
@@ -696,20 +722,20 @@ private struct DrawerBookShelfLayout: View {
                 DrawerSidebar(books: books)
                     .frame(width: 210)
 
-                DrawerBookList(books: books)
+                DrawerBookList(books: books, requestDelete: requestDelete)
                     .frame(minWidth: 420)
 
                 if let firstBook = books.first {
-                    DrawerDetailCard(book: firstBook)
+                    DrawerDetailCard(book: firstBook, requestDelete: requestDelete)
                         .frame(width: 260)
                 }
             }
 
             VStack(spacing: 0) {
-                DrawerBookList(books: books)
+                DrawerBookList(books: books, requestDelete: requestDelete)
 
                 if let firstBook = books.first {
-                    DrawerDetailCard(book: firstBook)
+                    DrawerDetailCard(book: firstBook, requestDelete: requestDelete)
                 }
             }
         }
@@ -798,6 +824,7 @@ private struct DrawerBookList: View {
     @EnvironmentObject private var model: ReaderModel
 
     let books: [Book]
+    let requestDelete: (Book) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -814,7 +841,7 @@ private struct DrawerBookList: View {
             DrawerHeaderRow()
 
             ForEach(Array(books.enumerated()), id: \.element.id) { index, book in
-                DrawerBookRow(book: book, index: index)
+                DrawerBookRow(book: book, index: index, requestDelete: requestDelete)
             }
         }
         .background(Color.readerPaper(for: model.readingSettings.theme).opacity(0.18))
@@ -852,6 +879,7 @@ private struct DrawerBookRow: View {
 
     let book: Book
     let index: Int
+    let requestDelete: (Book) -> Void
 
     var body: some View {
         ZStack(alignment: .trailing) {
@@ -916,7 +944,9 @@ private struct DrawerBookRow: View {
             .help(book.helpPath)
 
             if isHovered {
-                BookCardDeleteButton(bookId: book.id, book: book)
+                BookCardDeleteButton {
+                    requestDelete(book)
+                }
                     .padding(.trailing, 10)
                     .transition(.opacity)
             }
@@ -942,6 +972,7 @@ private struct DrawerDetailCard: View {
     @State private var isHovered = false
 
     let book: Book
+    let requestDelete: (Book) -> Void
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
@@ -983,7 +1014,9 @@ private struct DrawerDetailCard: View {
             .background(Color.sidebarBackground(for: model.readingSettings.theme).opacity(0.62))
 
             if isHovered {
-                BookCardDeleteButton(bookId: book.id, book: book)
+                BookCardDeleteButton {
+                    requestDelete(book)
+                }
                     .padding(10)
                     .transition(.opacity)
             }
@@ -1156,24 +1189,10 @@ private struct ProgressStrip: View {
 }
 
 private struct BookCardDeleteButton: View {
-    @EnvironmentObject private var model: ReaderModel
-    let bookId: UUID
-    let book: Book
-    @State private var showDeleteConfirm = false
-
-    private var isLocal: Bool {
-        if case .local = book.origin { return true }
-        return false
-    }
+    let action: () -> Void
 
     var body: some View {
-        Button {
-            if isLocal {
-                showDeleteConfirm = true
-            } else {
-                model.deleteBook(id: bookId)
-            }
-        } label: {
+        Button(action: action) {
             Image(systemName: "xmark")
                 .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(.white)
@@ -1187,20 +1206,137 @@ private struct BookCardDeleteButton: View {
         }
         .buttonStyle(.plain)
         .help("移除")
-        .confirmationDialog(
-            "删除《\(book.title)》",
-            isPresented: $showDeleteConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("从书架移除", role: .destructive) {
-                model.removeFromShelf(id: bookId)
+    }
+}
+
+private struct BookDeleteConfirmPanel: View {
+    @EnvironmentObject private var model: ReaderModel
+
+    let book: Book
+    let dismiss: () -> Void
+
+    private var isLocal: Bool {
+        book.localURL != nil
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 11) {
+                Image(systemName: "trash")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(deleteColor)
+                    .frame(width: 30, height: 30)
+                    .background(deleteColor.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("删除《\(book.title)》")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(Color.readerInk(for: model.readingSettings.theme))
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text(isLocal ? "保留 TXT，或一起删除文件。" : "从书架移除这本在线书。")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+
+                Spacer(minLength: 0)
             }
-            Button("删除本地文件", role: .destructive) {
-                model.deleteBook(id: bookId)
+
+            HStack(spacing: 8) {
+                Button {
+                    dismiss()
+                } label: {
+                    Text("取消")
+                        .frame(width: 70, height: 32)
+                }
+                .buttonStyle(DeletePanelButtonStyle(kind: .quiet))
+
+                Spacer(minLength: 0)
+
+                Button {
+                    model.removeFromShelf(id: book.id)
+                    dismiss()
+                } label: {
+                    Text(isLocal ? "仅移除" : "移除")
+                        .frame(width: 76, height: 32)
+                }
+                .buttonStyle(DeletePanelButtonStyle(kind: .secondary))
+
+                if isLocal {
+                    Button {
+                        model.deleteBook(id: book.id)
+                        dismiss()
+                    } label: {
+                        Text("删除文件")
+                            .frame(width: 86, height: 32)
+                    }
+                    .buttonStyle(DeletePanelButtonStyle(kind: .destructive))
+                }
             }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("从书架移除只删书架记录，本地文件保留。\n删除本地文件会同时移除书架记录和磁盘上的 txt 文件。")
+        }
+        .padding(16)
+        .background(Color.readerPanel(for: model.readingSettings.theme))
+    }
+
+    private var deleteColor: Color {
+        Color(nsColor: NSColor(red: 0.620, green: 0.180, blue: 0.130, alpha: 1))
+    }
+}
+
+private struct DeletePanelButtonStyle: ButtonStyle {
+    enum Kind {
+        case quiet
+        case secondary
+        case destructive
+    }
+
+    let kind: Kind
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(foregroundColor)
+            .background(backgroundColor(isPressed: configuration.isPressed))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(borderColor(isPressed: configuration.isPressed), lineWidth: 1)
+            }
+    }
+
+    private var foregroundColor: Color {
+        switch kind {
+        case .quiet:
+            .secondary
+        case .secondary:
+            .readerAccent
+        case .destructive:
+            .white
+        }
+    }
+
+    private func backgroundColor(isPressed: Bool) -> Color {
+        switch kind {
+        case .quiet:
+            Color.primary.opacity(isPressed ? 0.10 : 0.06)
+        case .secondary:
+            Color.readerAccent.opacity(isPressed ? 0.16 : 0.10)
+        case .destructive:
+            Color(nsColor: NSColor(red: 0.620, green: 0.180, blue: 0.130, alpha: isPressed ? 0.86 : 1))
+        }
+    }
+
+    private func borderColor(isPressed: Bool) -> Color {
+        switch kind {
+        case .quiet:
+            Color.sidebarBorder.opacity(isPressed ? 0.9 : 0.64)
+        case .secondary:
+            Color.readerAccent.opacity(isPressed ? 0.34 : 0.22)
+        case .destructive:
+            Color.clear
         }
     }
 }

@@ -187,7 +187,7 @@ struct ReaderPaneView: View {
     private func goToNextPage(ranges: [PageRange]) {
         if currentPage + 1 < ranges.count {
             currentPage += 1
-        } else if model.selectedChapterIndex + 1 < model.chapters.count {
+        } else if model.selectedChapterIndex + 1 < model.chapterCount {
             model.selectNextChapter()
             currentPage = 0
         }
@@ -262,7 +262,7 @@ private struct ChapterNavigationFooter: View {
     }
 
     private var hasNextChapter: Bool {
-        model.selectedChapterIndex + 1 < model.chapters.count
+        model.selectedChapterIndex + 1 < model.chapterCount
     }
 
     var body: some View {

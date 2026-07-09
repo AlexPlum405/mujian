@@ -499,7 +499,6 @@ struct OnlineSearchPanel: View {
     @EnvironmentObject private var model: ReaderModel
     let dismiss: () -> Void
 
-    @State private var query = ""
     @FocusState private var isFocused: Bool
 
     private var theme: ReadingTheme { model.readingSettings.theme }
@@ -531,17 +530,17 @@ struct OnlineSearchPanel: View {
             }
 
             HStack(spacing: 8) {
-                TextField("输入书名或作者", text: $query)
+                TextField("输入书名或作者", text: $model.onlineSearchQuery)
                     .font(.system(size: 13, weight: .medium))
                     .textFieldStyle(.plain)
                     .foregroundStyle(Color.readerInk(for: theme))
                     .focused($isFocused)
                     .onSubmit {
-                        model.searchOnline(query: query)
+                        model.searchOnline(query: model.onlineSearchQuery)
                     }
 
                 Button {
-                    model.searchOnline(query: query)
+                    model.searchOnline(query: model.onlineSearchQuery)
                 } label: {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 13, weight: .semibold))
@@ -568,33 +567,6 @@ struct OnlineSearchPanel: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 24)
-            } else if let progress = model.downloadProgress {
-                VStack(spacing: 8) {
-                    HStack(spacing: 8) {
-                        ProgressView()
-                            .controlSize(.small)
-                        Text("下载《\(progress.title)》")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Text("\(progress.current)/\(progress.total)")
-                            .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(Color.readerAccent)
-                    }
-                    if progress.total > 0 {
-                        ProgressView(value: Double(progress.current), total: Double(progress.total))
-                            .tint(Color.readerAccent)
-                    }
-                    HStack {
-                        Spacer()
-                        Button("取消") {
-                            model.cancelDownload()
-                        }
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(.vertical, 16)
             } else if model.onlineSearchResults.isEmpty {
                 VStack(spacing: 10) {
                     Image(systemName: "magnifyingglass")
@@ -604,7 +576,7 @@ struct OnlineSearchPanel: View {
                         .background(Color.readerAccent.opacity(0.12))
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
-                    Text(query.isEmpty ? "输入关键词搜索在线书籍" : "没有找到结果")
+                    Text(model.onlineSearchQuery.isEmpty ? "输入关键词搜索在线书籍" : "没有找到结果")
                         .font(.system(size: 13))
                         .foregroundStyle(.secondary)
                 }
@@ -637,6 +609,7 @@ private struct OnlineSearchResultRow: View {
 
     private var theme: ReadingTheme { model.readingSettings.theme }
     @State private var isAdded = false
+    private var isDownloading: Bool { model.downloadProgress != nil }
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -691,8 +664,9 @@ private struct OnlineSearchResultRow: View {
                         .frame(width: 28, height: 28)
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .help("下载到本地")
+                .foregroundStyle(isDownloading ? Color.secondary.opacity(0.42) : Color.secondary)
+                .disabled(isDownloading)
+                .help(isDownloading ? "正在下载" : "下载到本地")
             }
         }
         .padding(.horizontal, 10)

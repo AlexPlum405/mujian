@@ -44,7 +44,7 @@ struct NovelReaderApp: App {
                     model.selectNextChapter()
                 }
                 .keyboardShortcut(.rightArrow, modifiers: [.command])
-                .disabled(model.selectedChapterIndex + 1 >= model.chapters.count)
+                .disabled(model.selectedChapterIndex + 1 >= model.chapterCount)
 
                 Divider()
 

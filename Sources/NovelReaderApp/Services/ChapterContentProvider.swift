@@ -110,10 +110,27 @@ final class OnlineChapterContentProvider: ChapterContentProvider {
 
     func preloadChapterList(_ chapters: [OnlineChapter], for bookId: UUID) {
         chapterListCache[bookId] = chapters
+        saveChapterList(chapters, for: bookId)
+    }
+
+    func cachedChapterList(for bookId: UUID) -> [OnlineChapter]? {
+        if let cached = chapterListCache[bookId] {
+            return cached
+        }
+
+        let url = chapterListCacheURL(for: bookId)
+        guard let data = try? Data(contentsOf: url),
+              let chapters = try? JSONDecoder().decode([OnlineChapter].self, from: data),
+              chapters.isEmpty == false else {
+            return nil
+        }
+
+        chapterListCache[bookId] = chapters
+        return chapters
     }
 
     func chapterList(for bookId: UUID, book: Book, source: BookSource) async throws -> [OnlineChapter] {
-        if let cached = chapterListCache[bookId] {
+        if let cached = cachedChapterList(for: bookId) {
             return cached
         }
         let chapters: [OnlineChapter]
@@ -123,7 +140,14 @@ final class OnlineChapterContentProvider: ChapterContentProvider {
             chapters = []
         }
         chapterListCache[bookId] = chapters
+        saveChapterList(chapters, for: bookId)
         return chapters
+    }
+
+    private func chapterListCacheURL(for bookId: UUID) -> URL {
+        cacheDirectory
+            .appendingPathComponent(bookId.uuidString)
+            .appendingPathComponent("chapters.json")
     }
 
     private func cacheURL(for bookId: UUID, chapterIndex: Int) -> URL {
@@ -143,12 +167,18 @@ final class OnlineChapterContentProvider: ChapterContentProvider {
         try? content.write(to: url, atomically: true, encoding: .utf8)
     }
 
+    private func saveChapterList(_ chapters: [OnlineChapter], for bookId: UUID) {
+        guard chapters.isEmpty == false,
+              let data = try? JSONEncoder().encode(chapters) else {
+            return
+        }
+
+        let url = chapterListCacheURL(for: bookId)
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? data.write(to: url, options: .atomic)
+    }
+
     static func clean(_ raw: String) -> String {
-        raw
-            .replacingOccurrences(of: "&nbsp;", with: " ")
-            .components(separatedBy: "\n")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { $0.isEmpty == false }
-            .joined(separator: "\n")
+        OnlineContentFormatter.cleanPlainText(raw)
     }
 }

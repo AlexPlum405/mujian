@@ -12,6 +12,8 @@ struct ReaderFloatingPanel: View {
             270
         case .search:
             300
+        case .onlineSearch:
+            420
         case .sources:
             360
         case nil:
@@ -30,6 +32,10 @@ struct ReaderFloatingPanel: View {
                 ThemeQuickPanel()
             case .search:
                 SearchPanel()
+            case .onlineSearch:
+                OnlineSearchPanel {
+                    model.closePanel()
+                }
             case .sources:
                 BookSourceManagePanel {
                     model.closePanel()
@@ -55,33 +61,33 @@ private struct ChapterDirectoryPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            PanelHeader(title: "目录", subtitle: model.hasDocument ? "\(model.chapters.count) 章" : "等待 TXT")
+            PanelHeader(title: "目录", subtitle: model.hasDocument ? "\(model.chapterCount) 章" : "等待 TXT")
 
             if model.hasDocument {
                 ScrollView {
-                    VStack(spacing: 5) {
-                        ForEach(model.chapters) { chapter in
+                    LazyVStack(spacing: 5) {
+                        ForEach(model.chapterDirectoryItems) { chapter in
                             Button {
                                 model.selectChapter(id: chapter.id)
                                 model.closePanel()
                             } label: {
                                 HStack(spacing: 10) {
                                     Text(chapter.title)
-                                        .font(.system(size: 12, weight: chapter.id == model.currentChapter?.id ? .semibold : .regular))
+                                        .font(.system(size: 12, weight: chapter.id == model.selectedChapterIndex ? .semibold : .regular))
                                         .lineLimit(1)
 
                                     Spacer()
 
-                                    if chapter.id == model.currentChapter?.id {
+                                    if chapter.id == model.selectedChapterIndex {
                                         Circle()
                                             .fill(Color.readerAccent)
                                             .frame(width: 5, height: 5)
                                     }
                                 }
-                                .foregroundStyle(chapter.id == model.currentChapter?.id ? Color.readerInk : Color.secondary)
+                                .foregroundStyle(chapter.id == model.selectedChapterIndex ? Color.readerInk : Color.secondary)
                                 .padding(.horizontal, 9)
                                 .frame(height: 32)
-                                .background(chapter.id == model.currentChapter?.id ? Color.readerAccent.opacity(0.12) : Color.clear)
+                                .background(chapter.id == model.selectedChapterIndex ? Color.readerAccent.opacity(0.12) : Color.clear)
                                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                             }
                             .buttonStyle(.plain)
@@ -385,9 +391,14 @@ private struct SearchPanel: View {
     @EnvironmentObject private var model: ReaderModel
     @FocusState private var isSearchFieldFocused: Bool
 
+    private var canSearchOnline: Bool {
+        model.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            && model.bookSources.contains { $0.isEnabled }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            PanelHeader(title: "搜索", subtitle: model.hasDocument ? "\(model.chapters.count) 章" : "等待 TXT")
+            PanelHeader(title: "正文搜索", subtitle: model.hasDocument ? "\(model.chapterCount) 章" : "等待 TXT")
 
             if model.hasDocument {
                 HStack(spacing: 8) {
@@ -424,11 +435,27 @@ private struct SearchPanel: View {
                 }
 
                 if model.searchResults.isEmpty {
-                    Text(searchEmptyHint)
-                        .font(.system(size: 11, weight: .regular))
-                        .foregroundStyle(Color.secondary)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.vertical, 24)
+                    VStack(spacing: 10) {
+                        Text(searchEmptyHint)
+                            .font(.system(size: 11, weight: .regular))
+                            .foregroundStyle(Color.secondary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+
+                        if canSearchOnline {
+                            Button {
+                                model.openOnlineSearch(query: model.searchQuery)
+                            } label: {
+                                HStack(spacing: 5) {
+                                    Image(systemName: "network")
+                                        .font(.system(size: 11, weight: .semibold))
+                                    Text("搜书源")
+                                        .font(.system(size: 12, weight: .semibold))
+                                }
+                            }
+                            .buttonStyle(PanelActionButtonStyle(width: 86))
+                        }
+                    }
+                    .padding(.vertical, 24)
                 } else {
                     ScrollView {
                         VStack(spacing: 5) {
